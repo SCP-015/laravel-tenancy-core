@@ -1,0 +1,42 @@
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    image: nusahire-jenkins:latest
+    container_name: nusahire-jenkins
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../:/var/jenkins_home/workspace/nusahire
+    environment:
+      - JENKINS_OPTS=--prefix=/jenkins
+      - JAVA_OPTS=-Dhudson.plugins.git.GitSCM.ALLOW_LOCAL_CHECKOUT=true
+    networks:
+      - jenkins-network
+
+  # PHP Agent untuk running tests
+  php-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nusahire-php-agent:latest
+    container_name: nusahire-php-agent
+    volumes:
+      - ../:/var/www
+    working_dir: /var/www
+    command: tail -f /dev/null
+    networks:
+      - jenkins-network
+
+volumes:
+  jenkins_home:
+
+networks:
+  jenkins-network:
+    driver: bridge

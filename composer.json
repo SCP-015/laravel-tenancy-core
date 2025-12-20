@@ -1,0 +1,119 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "nusanet/nusahire",
+    "type": "project",
+    "description": "The skeleton application for the Laravel framework.",
+    "keywords": [
+        "laravel",
+        "framework",
+        "nusahire"
+    ],
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "dedoc/scramble": "^0.12.11",
+        "dyanakiev/laravel-logger-discord-channel": "^6.1",
+        "inertiajs/inertia-laravel": "^2.0",
+        "laravel/framework": "^12.0",
+        "laravel/octane": "^2.8",
+        "laravel/passport": "^12.0",
+        "laravel/socialite": "^5.18",
+        "laravel/tinker": "^2.10.1",
+        "maennchen/zipstream-php": "^2.1",
+        "owen-it/laravel-auditing": "^14.0",
+        "phpoffice/phpspreadsheet": "~1.29.0",
+        "sentry/sentry-laravel": "^4.18",
+        "spatie/laravel-permission": "^6.21",
+        "stancl/tenancy": "^3.9",
+        "thiagocordeiro/laravel-translator": "^1.2"
+    },
+    "require-dev": {
+        "brianium/paratest": "^7.8",
+        "deployer/deployer": "^7.5",
+        "fakerphp/faker": "^1.23",
+        "friendsofphp/php-cs-fixer": "^3.75",
+        "laravel/pail": "^1.2.2",
+        "laravel/pint": "^1.13",
+        "laravel/sail": "^1.41",
+        "mockery/mockery": "^1.6",
+        "nunomaduro/collision": "^8.6",
+        "phpunit/phpunit": "^11.5.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/",
+            "Database\\Seeders\\Tenant\\": "database/seeders/tenant/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi",
+            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
+            "@php artisan migrate --graceful --ansi"
+        ],
+        "setup": [
+            "Composer\\Config::disableProcessTimeout",
+            "composer install",
+            "npm install",
+            "cp .env.example .env",
+            "php artisan key:generate",
+            "php artisan passport:keys --force",
+            "php artisan migrate --graceful",
+            "php artisan db:seed",
+            "php artisan passport:client --personal",
+            "php artisan storage:link"
+        ],
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "php artisan optimize:clear",
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite"
+        ],
+        "test": [
+            "@test:cleanup",
+            "Composer\\Config::disableProcessTimeout",
+            "php -d memory_limit=512M artisan test --parallel --processes=3 --no-coverage --stop-on-failure"
+        ],
+        "test:coverage-html": [
+            "@test:cleanup",
+            "Composer\\Config::disableProcessTimeout",
+            "php -d memory_limit=512M -d pcov.enabled=1 -d pcov.directory=app artisan test --parallel --processes=3 --coverage --coverage-html=coverage-report",
+            "@php -r \"echo '\\n📊 HTML report: open coverage-report/index.html\\n';\""
+        ],
+        "test:cleanup": [
+            "./cleanup-test-db.sh"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

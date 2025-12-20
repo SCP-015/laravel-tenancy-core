@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  jenkins-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nusahire-jenkins-agent
+    volumes:
+      - ../:/var/www
+      - ~/.composer:/root/.composer
+    working_dir: /var/www
+    command: tail -f /dev/null
+    networks:
+      - jenkins-network
+
+networks:
+  jenkins-network:
+    driver: bridge

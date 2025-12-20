@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+    themes: light --default;
+}
+
+.container,
+.container-fluid,
+.container-xl,
+.container-lg,
+.container-md,
+.container-sm {
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
+}
+
+@media (min-width: 576px) {
+    .container-sm,
+    .container {
+        max-width: 540px;
+    }
+}
+
+@media (min-width: 768px) {
+    .container-md,
+    .container-sm,
+    .container {
+        max-width: 720px;
+    }
+}
+
+@media (min-width: 992px) {
+    .container-lg,
+    .container-md,
+    .container-sm,
+    .container {
+        max-width: 960px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .container-xl,
+    .container-lg,
+    .container-md,
+    .container-sm,
+    .container {
+        max-width: 1140px;
+    }
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.default-container {
+    padding-left: 1.5em;
+    padding-right: 1.5em;
+}
+
+.vs--searchable .vs__dropdown-toggle {
+    height: 38px !important;
+}
+
+@media (max-width: 991px) {
+    .default-container {
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
+}
+
+.vs--single .vs__selected {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 194px;
+}
+
+.vs__dropdown-option {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: auto;
+}
+
+.b-new-green {
+    background: #13852d !important;
+    color: white !important;
+}
+
+.b-line-black {
+    border: 1px solid #3a3a3a !important;
+}
+
+.b-black-foundation {
+    background: #3a3a3a !important;
+}
+
+/* Hilangkan spinner input number */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input {
+    -moz-appearance: textfield; /* Firefox */
+}
+
+.vs__search,
+.vs__search:focus {
+    font-size: 14px !important;
+}
+
+button:disabled {
+    cursor: not-allowed !important;
+    background-color: #f2f2f2 !important;
+    color: #3a3a3a !important;
+}

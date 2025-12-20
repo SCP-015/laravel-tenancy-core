@@ -1,0 +1,41 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e7]:
+    - link "nusahire" [ref=e9] [cursor=pointer]:
+      - /url: /
+      - text: nusa
+      - strong [ref=e10]: hire
+    - generic [ref=e11] [cursor=pointer]:
+      - button "Google Masuk dengan Google" [ref=e12]:
+        - img "Google" [ref=e13]
+        - generic [ref=e14]: Masuk dengan Google
+      - button "logo nusawork Masuk dengan Nusawork" [ref=e15]:
+        - img "logo nusawork" [ref=e16]
+        - generic [ref=e18]: Masuk dengan Nusawork
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - img "lowongan nusahire" [ref=e22]
+        - paragraph [ref=e23]:
+          - text: Buat lowongan
+          - text: dengan cepat
+      - generic [ref=e24]:
+        - img "sortinglowongan nusahire" [ref=e26]
+        - paragraph [ref=e27]:
+          - text: Sorting kandidat
+          - text: secara otomatis
+      - generic [ref=e28]:
+        - img "schedule nusahire" [ref=e30]
+        - paragraph [ref=e31]:
+          - text: Tentukan jadwal
+          - text: interview
+    - img "icon feedback" [ref=e33] [cursor=pointer]
+    - contentinfo [ref=e34]:
+      - text: Hiring solution from
+      - link "Nusawork" [ref=e35] [cursor=pointer]:
+        - /url: https://nusawork.com
+  - button "Report Issue" [ref=e36] [cursor=pointer]:
+    - img [ref=e37]
+    - generic [ref=e40]: Report Issue
+```

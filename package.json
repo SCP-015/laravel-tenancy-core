@@ -1,0 +1,53 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite",
+        "ssr": "node server.js"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4.1.4",
+        "@tailwindcss/vite": "^4.1.5",
+        "@vheemstra/vite-plugin-imagemin": "^2.2.1",
+        "@vitejs/plugin-vue": "^5.2.3",
+        "autoprefixer": "^10.4.21",
+        "axios": "^1.10.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^1.2.0",
+        "postcss": "^8.5.3",
+        "sharp": "^0.34.5",
+        "tailwindcss": "^4.1.5",
+        "terser": "^5.44.1",
+        "vite": "^6.3.3",
+        "vite-imagetools": "^9.0.2",
+        "vite-plugin-imagemin": "^0.6.1"
+    },
+    "dependencies": {
+        "@inertiajs/inertia": "^0.11.1",
+        "@inertiajs/vue3": "^2.0.11",
+        "@popperjs/core": "^2.11.8",
+        "@sentry/browser": "^10.22.0",
+        "@vue/server-renderer": "^3.5.13",
+        "daisyui": "^5.0.35",
+        "dayjs": "^1.11.13",
+        "express": "^5.1.0",
+        "file-saver": "^2.0.5",
+        "html-to-image": "^1.11.13",
+        "html2canvas": "^1.4.1",
+        "intl-tel-input": "^25.3.1",
+        "pinia": "^3.0.3",
+        "v-calendar": "^3.1.2",
+        "v-money3": "^3.24.1",
+        "vue": "^3.5.13",
+        "vue-advanced-cropper": "^2.8.8",
+        "vue-draggable-next": "^2.2.1",
+        "vue-router": "^4.5.1",
+        "vue-select": "^4.0.0-beta.6",
+        "vue-server-renderer": "^2.2.6",
+        "vue-tel-input": "^9.5.0",
+        "vue3-dropzone": "^2.2.1",
+        "vue3-tel-input": "^1.0.4",
+        "xlsx": "^0.18.5"
+    }
+}

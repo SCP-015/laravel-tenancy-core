@@ -1,0 +1,91 @@
+// Jenkinsfile untuk Local Testing
+// Simplified version tanpa Git SCM dan SonarQube
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Setup Environment') {
+            steps {
+                script {
+                    echo '🔧 Setting up test environment...'
+                    
+                    // Run di PHP Agent container
+                    // TIDAK copy .env - biarkan .env local aman, phpunit.xml sudah handle env testing
+                    sh '''
+                        docker exec nusahire-php-agent composer install --no-interaction
+                        docker exec nusahire-php-agent php artisan config:clear
+                        
+                        # Generate keys dengan APP_ENV=testing agar tidak menggunakan .env local
+                        docker exec -e APP_ENV=testing nusahire-php-agent php artisan passport:keys --force
+                    '''
+                }
+            }
+        }
+        
+        stage('Install Node Dependencies') {
+            steps {
+                script {
+                    echo '📦 Installing Node dependencies...'
+                    
+                    sh '''
+                        docker exec nusahire-php-agent npm ci
+                    '''
+                }
+            }
+        }
+        
+        stage('Build Frontend') {
+            steps {
+                script {
+                    echo '🏗️ Building frontend assets...'
+                    
+                    sh '''
+                        docker exec nusahire-php-agent npm run build
+                    '''
+                }
+            }
+        }
+        
+        stage('Run Tests with PCOV') {
+            steps {
+                script {
+                    echo '🧪 Running tests with PCOV coverage...'
+                    
+                    sh '''
+                        docker exec nusahire-php-agent php -d memory_limit=512M -d pcov.enabled=1 -d pcov.directory=app artisan test --parallel --coverage --coverage-clover=coverage.xml
+                    '''
+                }
+            }
+        }
+        
+        stage('Generate Coverage Report') {
+            steps {
+                script {
+                    echo '📊 Checking coverage report...'
+                    
+                    sh '''
+                        docker exec nusahire-php-agent test -f coverage.xml && echo "✅ Coverage report generated" || echo "❌ Coverage report not found"
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ All tests passed!'
+            // Archive coverage report
+            sh 'docker cp nusahire-php-agent:/var/www/coverage.xml .'
+            archiveArtifacts artifacts: 'coverage.xml', allowEmptyArchive: true
+        }
+        failure {
+            echo '❌ Tests failed!'
+        }
+        always {
+            echo '🧹 Cleaning up...'
+            // Cleanup test databases
+            sh 'docker exec nusahire-php-agent bash -c "./cleanup-test-db.sh || true"'
+        }
+    }
+}

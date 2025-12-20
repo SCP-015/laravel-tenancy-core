@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -e # Keluar segera jika ada perintah yang gagal
+
+# --- Konfigurasi (Sesuaikan dengan kebutuhan Anda) ---
+PROJECT_PATH="/var/www/nusahire" # GANTI DENGAN PATH PROYEK ANDA YANG BENAR
+GIT_BRANCH="develop"             # Branch Git yang akan di-deploy (misalnya main, master, develop)
+PHP_BINARY="php8.3"              # Perintah untuk PHP 8.3
+# Pastikan $(which composer) mengarah ke Composer yang benar dan bisa dieksekusi oleh $PHP_BINARY
+# Jika composer.phar ada di root proyek, Anda bisa gunakan:
+# COMPOSER_CMD="$PHP_BINARY composer.phar"
+COMPOSER_CMD="$PHP_BINARY $(which composer)" # Menggunakan Composer global melalui PHP 8.3
+WEB_SERVER_GROUP="www-data"      # Grup user web server (misalnya www-data, nginx, apache)
+NODE_VERSION="v18.17.1"          # Versi Node.js yang akan digunakan
+
+# --- Mulai Skrip Deploy ---
+
+echo "Memulai proses deployment untuk proyek di: $PROJECT_PATH"
+echo "Branch: $GIT_BRANCH"
+echo "Timestamp: $(date)"
+echo "--------------------------------------------------"
+
+# 1. Navigasi ke Direktori Proyek
+cd "$PROJECT_PATH" || { echo "Gagal navigasi ke direktori proyek: $PROJECT_PATH"; exit 1; }
+echo "Berada di direktori: $(pwd)"
+
+# 2. (Opsional) Aktifkan Maintenance Mode
+# echo "Mengaktifkan maintenance mode..."
+# $PHP_BINARY artisan down --refresh=15 --secret="rahasia-deploy-anda"
+# (Ganti "rahasia-deploy-anda" dengan secret Anda untuk bypass maintenance mode)
+
+# 3. Bersihkan Perubahan Lokal yang Tidak Dicatat & Ambil Kode Terbaru dari Git
+echo "Membersihkan perubahan lokal dan menarik kode terbaru dari Git (branch: $GIT_BRANCH)..."
+git checkout .
+git checkout "$GIT_BRANCH"
+git pull origin "$GIT_BRANCH"
+
+# 4. Install atau Update Dependensi Composer
+echo "Menginstall/memperbarui dependensi Composer..."
+# --no-interaction: Jangan ajukan pertanyaan interaktif
+# --prefer-dist: Lebih suka mengunduh versi terdistribusi (arsip zip)
+# --optimize-autoloader: Optimalkan autoloader (sudah termasuk dump-autoload)
+# --no-dev: Lewati dependensi development
+$COMPOSER_CMD install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+
+# 4.1. (Opsional Tambahan) Jalankan composer dump-autoload secara eksplisit
+# Meskipun --optimize-autoloader pada 'composer install' biasanya sudah cukup,
+# beberapa alur kerja mungkin memilih untuk menjalankannya lagi secara eksplisit,
+# terutama jika ada skrip pasca-install yang mungkin mengubah file yang perlu di-autoload.
+# Untuk kebanyakan kasus, ini mungkin redundan jika --optimize-autoloader sudah digunakan.
+echo "Menjalankan composer dump-autoload (optimasi tambahan)..."
+$COMPOSER_CMD dump-autoload --optimize --no-dev
+
+echo "--------------------------------------------------"
+
+# 5. Setup NVM dan Build Aset Frontend (NPM)
+echo "Menyiapkan NVM dan membangun aset frontend..."
+export NVM_DIR="$HOME/.nvm"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  \. "$NVM_DIR/nvm.sh"  # Muat NVM
+  echo "NVM dimuat."
+
+  echo "Menginstall Node.js versi $NODE_VERSION (jika belum ada)..."
+  nvm install "$NODE_VERSION"
+
+  echo "Menggunakan Node.js versi $NODE_VERSION..."
+  nvm use "$NODE_VERSION"
+
+  echo "Versi Node.js saat ini: $(node -v)"
+  echo "Versi NPM saat ini: $(npm -v)"
+
+  echo "Menghapus direktori node_modules (jika ada)..."
+  sudo rm -rf node_modules # Menggunakan sudo jika user saat ini tidak memiliki izin
+
+  echo "Membersihkan cache NPM..."
+  sudo npm cache clear --force
+
+  echo "Menginstall dependensi NPM..."
+  npm install # Anda mungkin perlu --legacy-peer-deps tergantung proyek Anda
+
+  echo "Membangun aset frontend (npm run build)..."
+  npm run build # Atau 'npm run prod' atau 'npm run generate' sesuai skrip package.json Anda
+else
+  echo "PERINGATAN: NVM tidak ditemukan di $NVM_DIR. Langkah build frontend dilewati."
+  echo "Pastikan NVM terinstal dengan benar untuk user yang menjalankan skrip ini."
+fi
+echo "Selesai membangun aset frontend."
+echo "--------------------------------------------------"
+
+# 6. Jalankan Migrasi Database
+echo "Menjalankan migrasi database pusat..."
+$PHP_BINARY artisan migrate --force # --force untuk menjalankan di mode non-interaktif
+
+echo "Menjalankan migrasi database tenant..."
+$PHP_BINARY artisan tenants:migrate --force # Untuk semua tenant
+
+# 7. Optimasi Aplikasi Laravel (Cache)
+echo "Membersihkan cache lama dan membuat cache baru..."
+$PHP_BINARY artisan optimize:clear # Membersihkan semua cache (config, route, view, event)
+$PHP_BINARY artisan config:cache   # Cache konfigurasi
+$PHP_BINARY artisan route:cache    # Cache routing
+$PHP_BINARY artisan view:cache     # Cache view (blade)
+$PHP_BINARY artisan event:cache    # Cache event (jika menggunakan auto-discovery)
+
+# Jika Anda menggunakan fitur caching identifikasi rute dari Stancl/Tenancy
+# echo "Caching tenant identification routes..."
+# $PHP_BINARY artisan tenancy:cache-identification-routes
+
+# 8. Atur Hak Akses Folder
+echo "Mengatur hak akses untuk direktori storage dan bootstrap/cache..."
+# Mengubah grup folder ke grup web server agar web server bisa menulis log, cache, dll.
+# Anda mungkin perlu sudo untuk perintah chgrp jika user yang menjalankan skrip bukan pemilik folder
+# dan bukan bagian dari grup target.
+sudo chgrp -R "$WEB_SERVER_GROUP" storage bootstrap/cache
+sudo chmod -R ug+rwx storage bootstrap/cache
+
+# 9. (Opsional) Restart Queue Worker
+# Jika Anda menggunakan Laravel Queues dengan Supervisor atau sejenisnya.
+# Ini sangat tergantung pada konfigurasi server Anda.
+# Contoh jika menggunakan Supervisor dan semua worker dikelola olehnya:
+# echo "Merestart queue workers (Supervisor)..."
+# sudo supervisorctl restart all
+# Atau jika Anda menggunakan perintah bawaan Laravel (membutuhkan cache driver):
+# echo "Memberi sinyal restart untuk queue workers Laravel..."
+# $PHP_BINARY artisan queue:restart
+
+# 10. (Opsional) Nonaktifkan Maintenance Mode
+# Pastikan ini dijalankan setelah semuanya berhasil.
+# echo "Menonaktifkan maintenance mode..."
+# $PHP_BINARY artisan up
+
+echo "--------------------------------------------------"
+echo "Proses deployment selesai!"
+echo "Timestamp: $(date)"
