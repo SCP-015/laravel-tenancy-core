@@ -181,9 +181,18 @@ export const useMainStore = defineStore("main", () => {
             },
             true
         );
-        state_portal.value = res.data;
-        localStorage.setItem("portal", JSON.stringify(res.data));
-        return res;
+
+        console.log('[DEBUG] getPortal response:', { endpoint, data: res.data });
+
+        // Normalisasi data: pastikan selalu array
+        const portalData = Array.isArray(res.data) ? res.data : [res.data];
+
+        state_portal.value = portalData;
+        localStorage.setItem("portal", JSON.stringify(portalData));
+
+        console.log('[DEBUG] Portal saved to localStorage:', portalData);
+
+        return { ...res, data: portalData };
     };
 
     const getAllPortal = async () => {
