@@ -18,18 +18,10 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [Controllers\Auth\AuthController::class, 'login']);
     Route::post('/validate-invite', [Controllers\Auth\AuthController::class, 'validateInvite']);
 
-    // Login dengan Google dan Nusawork
-    // Endpoint untuk redirect ke Google
-    Route::get(
-        '/google',
-        [Controllers\Auth\AuthController::class, 'redirectToGoogle']
-    );
-    // Endpoint callback dari Google
-    Route::get(
-        '/google/callback',
-        [Controllers\Auth\AuthController::class, 'handleGoogleCallback']
-    );
+
+    // Login dengan Nusawork
     Route::post('/nusawork/callback', [Controllers\Auth\AuthController::class, 'nusaworkCallback']);
+
 
     // Rute yang dilindungi
     Route::middleware('auth:api')->group(function () {
