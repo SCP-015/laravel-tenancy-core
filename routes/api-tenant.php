@@ -142,6 +142,42 @@ Route::middleware(['auth:api'])->group(function () use ($integer) {
 
     Route::get('/my-feedback', [Tenant\ListFeedbackController::class, 'index'])
     ->name('my-feedback.index');
+
+    // Default Signers Management (untuk Digital Signature)
+    Route::prefix('default-signers')->name('default-signers.')->group(function () {
+        Route::get('/', [Tenant\DefaultSignerController::class, 'index'])->name('index');
+        Route::get('/users', [Tenant\DefaultSignerController::class, 'getAvailableUsers'])->name('users');
+        Route::get('/workgroups', [Tenant\DefaultSignerController::class, 'getWorkgroups'])->name('workgroups');
+        Route::get('/workgroup/{workgroup}', [Tenant\DefaultSignerController::class, 'getSignersForWorkgroup'])->name('by-workgroup');
+        Route::post('/', [Tenant\DefaultSignerController::class, 'store'])->name('store');
+        Route::put('/{id}', [Tenant\DefaultSignerController::class, 'update'])->name('update');
+        Route::delete('/{id}', [Tenant\DefaultSignerController::class, 'destroy'])->name('destroy');
+    });
+
+    // API MOBILE - Digital Signature
+    // Unified Controller with Web
+    Route::prefix('digital-signature')->name('api.digital-signature.')->group(function () {
+        // 1. Dashboard & Data
+        Route::get('/dashboard', [Tenant\DigitalSignatureController::class, 'index'])->name('dashboard');
+        
+        // 2. Admin: Create Root CA
+        Route::post('/ca', [Tenant\DigitalSignatureController::class, 'storeCA'])->name('ca.store');
+        
+        // 3. User: Issue Certificate
+        Route::post('/certificates', [Tenant\DigitalSignatureController::class, 'issueCertificate'])->name('certificates.issue');
+        
+        // 4. Create Signing Session (Upload & Assign)
+        Route::post('/session', [Tenant\DigitalSignatureController::class, 'createSession'])->name('session.create');
+        
+        // 5. Sign Document
+        Route::post('/sign/{signatureId}', [Tenant\DigitalSignatureController::class, 'signDocument'])->name('sign');
+        
+        // 6. Verify File
+        Route::post('/verify', [Tenant\DigitalSignatureController::class, 'verifyUploadedFile'])->name('verify');
+        
+        // 7. Download Document
+        Route::get('/download/{documentId}', [Tenant\DigitalSignatureController::class, 'downloadDocument'])->name('download');
+    });
 });
 
 

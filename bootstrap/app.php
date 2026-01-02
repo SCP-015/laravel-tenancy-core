@@ -21,10 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Set cache headers untuk static assets dan landing page
         $middleware->append(SetCacheHeaders::class);
         
-        // Temporarily exempt digital signature routes from CSRF for debugging
+        // Exempt digital signature routes from CSRF
         $middleware->validateCsrfTokens(except: [
             '*/admin/digital-signature/*',
-            'api/auth/google/callback', // Google OAuth callback tidak membawa CSRF token
         ]);
         
         $middleware->group('universal', [

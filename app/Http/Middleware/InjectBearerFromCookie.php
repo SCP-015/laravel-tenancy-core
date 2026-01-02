@@ -14,11 +14,10 @@ class InjectBearerFromCookie
      */
     public function handle(Request $request, Closure $next)
     {
-        $isProxy = $request->hasHeader('X-Forwarded-For') || $request->hasHeader('Via');
         $identifier = $request->cookie(config('custom.proxy_key'));
 
-        if ($isProxy && $identifier) {
-            // Ambil IP asli dari X-Forwarded-For (ambil yang paling depan)
+        if ($identifier) {
+            // Ambil IP asli dari X-Forwarded-For jika ada (melalui proxy)
             $forwardedFor = $request->header('X-Forwarded-For');
             if ($forwardedFor) {
                 $realIp = trim(explode(',', $forwardedFor)[0]);
@@ -29,7 +28,26 @@ class InjectBearerFromCookie
             // Ambil token dari storage proxy
             $token = ProxyTokenService::get($identifier);
             if ($token) {
+                // Selalu set header Authorization
                 $request->headers->set('Authorization', 'Bearer ' . $token);
+
+                // Auto-login ke guard 'web' jika belum terautentikasi
+                if (!auth('web')->check()) {
+                    try {
+                        // Gunakan guard 'api' (Passport) untuk memvalidasi token
+                        $user = auth('api')->user();
+                        if ($user) {
+                            auth('web')->login($user);
+                            \Illuminate\Support\Facades\Log::info('InjectBearerFromCookie: Auto-login web guard success', ['user_id' => $user->id]);
+                        } else {
+                            \Illuminate\Support\Facades\Log::warning('InjectBearerFromCookie: Token valid but user not found in API guard');
+                        }
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('InjectBearerFromCookie: Auto-login failed', ['error' => $e->getMessage()]);
+                    }
+                }
+            } else {
+                \Illuminate\Support\Facades\Log::warning('InjectBearerFromCookie: Token not found for identifier', ['identifier' => $identifier]);
             }
         }
 

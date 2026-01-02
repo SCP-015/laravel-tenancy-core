@@ -57,7 +57,7 @@ class GoogleLoginService
             /** @var SocialiteUser $googleUser */
             /** @var \Laravel\Socialite\Two\AbstractProvider $provider */
             $provider = Socialite::driver('google');
-            $googleUser = $provider->user();
+            $googleUser = $provider->stateless()->user();
 
             // Handle user (create atau update)
             $user = $this->handleGoogleUser($googleUser, $request);
@@ -129,7 +129,7 @@ class GoogleLoginService
     }
 
     /**
-     * Handle invitation jika ada dalam session
+     * Handle invitation jika ada dalam state
      *
      * @param User $user
      * @param Request $request
@@ -138,18 +138,17 @@ class GoogleLoginService
      */
     private function handleInvitation(User $user, Request $request): void
     {
-        // Ambil custom data dari session
-        $customData = session('google_oauth_custom_data', []);
-        
+        $state = $request->input('state');
+        if (!$state) {
+            return;
+        }
+
+        $customData = json_decode(base64_decode($state), true);
         if (!isset($customData['join_code'])) {
             return;
         }
 
         $joinCode = $customData['join_code'];
-        
-        // Hapus data dari session setelah digunakan
-        session()->forget('google_oauth_custom_data');
-        
         $targetTenant = Tenant::where('code', $joinCode)->first();
 
         if (!$targetTenant) {

@@ -179,5 +179,11 @@ class User extends Authenticatable implements SyncMaster
         return $this->tenantUsers()->where('tenant_id', $tenantId)->first();
     }
 
-
+    /**
+     * Get user certificates (Tenant specific)
+     */
+    public function certificates()
+    {
+        return $this->hasMany(\App\Models\Tenant\UserCertificate::class, 'user_id');
+    }
 }

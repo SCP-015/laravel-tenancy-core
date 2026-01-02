@@ -668,6 +668,16 @@ const menus = computed(() => [
         name: "Dashboard",
     },
     {
+        route: getAdminRouteForPortal("/digital-signature"),
+        key: "digital-signature",
+        name: "Digital Signature",
+    },
+    {
+        route: getAdminRouteForPortal("/digital-signature/verify-signature"),
+        key: "verify-signature",
+        name: "Verify Signature",
+    },
+    {
         route: getAdminRouteForPortal("/settings"),
         key: "settings",
         name: "Pengaturan",

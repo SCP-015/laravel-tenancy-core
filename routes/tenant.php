@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Tenant\DigitalSignatureController;
 use App\Http\Middleware\InitializeTenancyByPathOrId;
 use App\Http\Middleware\LocalizationMiddleware;
 use Illuminate\Support\Facades\Route;

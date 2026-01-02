@@ -23,8 +23,10 @@
         "owen-it/laravel-auditing": "^14.0",
         "phpoffice/phpspreadsheet": "~1.29.0",
         "sentry/sentry-laravel": "^4.18",
+        "setasign/fpdi": "^2.6",
         "spatie/laravel-permission": "^6.21",
         "stancl/tenancy": "^3.9",
+        "tecnickcom/tcpdf": "^6.10",
         "thiagocordeiro/laravel-translator": "^1.2"
     },
     "require-dev": {

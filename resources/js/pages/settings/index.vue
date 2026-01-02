@@ -55,6 +55,10 @@
             <template v-else-if="currentNav == 'audit-logs'">
                 <auditLogs :asComponent="true" :collapsed="collapsed"></auditLogs>
             </template>
+
+            <template v-else-if="currentNav == 'default-signers'">
+                <defaultSigners :asComponent="true" :collapsed="collapsed"></defaultSigners>
+            </template>
         </div>
     </div>
 </template>
@@ -66,6 +70,7 @@ import portal from "../../pages/portal/index.vue";
 import feedback from "../../components/feedback.vue"
 import VariableSetting from "../../components/settings/variable-setting.vue";
 import auditLogs from "./audit-logs.vue";
+import defaultSigners from "../../components/settings/default-signers.vue";
 import { useMainStore } from "../../stores";
 import { router, usePage } from "@inertiajs/vue3";
 
@@ -89,6 +94,10 @@ let currentNav = ref("portal"),
         {
             id: "audit-logs",
             label: "Riwayat Perubahan",
+        },
+        {
+            id: "default-signers",
+            label: "Default Signers",
         },
         {
             id: "my-feedback",

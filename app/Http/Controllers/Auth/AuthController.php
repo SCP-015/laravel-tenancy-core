@@ -149,15 +149,12 @@ class AuthController extends Controller
                 $customData['join_code'] = $request->join_code;
             }
 
-            // Simpan custom data di session untuk diambil saat callback
-            if (!empty($customData)) {
-                session(['google_oauth_custom_data' => $customData]);
-            }
-
-            // Gunakan driver Google dengan session (HAPUS stateless untuk menghindari loop)
+            // Gunakan driver Google tanpa stateless
             $redirectUrl = Socialite::driver('google')
-                ->redirect()
-                ->getTargetUrl();
+                ->with([
+                    'state' => base64_encode(json_encode($customData))
+                ])
+                ->stateless()->redirect()->getTargetUrl();
 
             return response()->json([
                 'url' => $redirectUrl,

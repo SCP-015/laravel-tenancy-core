@@ -33,6 +33,22 @@ Route::group(['prefix' => 'admin'], function () {
             'requiresAuth' => true
         ],
     ]))->name('settings');
+
+    // Admin Digital Signature Module
+    Route::middleware([\App\Http\Middleware\InjectBearerFromCookie::class])->prefix('digital-signature')->name('digital-signature.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'index'])->name('index');
+        Route::post('/ca', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'storeCA'])->name('ca.store');
+        Route::post('/certificates', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'issueCertificate'])->name('certificates.store');
+        
+        Route::post('/session', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'createSession'])->name('session.store');
+        Route::post('/sign/{signatureId}', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'signDocument'])->name('sign');
+        
+        Route::get('/verify-signature', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'verifyPage'])->name('verify-page');
+        Route::post('/verify-file', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'verifyUploadedFile'])->name('verify-file');
+        
+        Route::get('/download/{document}', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'downloadDocument'])->name('download');
+        Route::get('/verify/{document}', [\App\Http\Controllers\Tenant\DigitalSignatureController::class, 'verifyDocument'])->name('verify');
+    });
 });
 
 // Redirect /home to /

@@ -120,4 +120,20 @@ class User extends Model implements Syncable, Auditable
             'global_id' => $userCentral->global_id,
         ])->first();
     }
+
+    /**
+     * Check if user has super_admin role.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->hasRole('super_admin');
+    }
+
+    /**
+     * Check if user has admin role.
+     */
+    public function isAdmin(): bool
+    {
+        return $this->hasRole('admin');
+    }
 }

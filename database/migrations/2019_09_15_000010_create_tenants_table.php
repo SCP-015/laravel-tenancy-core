@@ -15,17 +15,19 @@ class CreateTenantsTable extends Migration
      */
     public function up(): void
     {
-        Schema::create('tenants', function (Blueprint $table) {
-            $table->string('id')->primary();
-            // your custom columns may go here
-            $table->string('name')->unique();
-            $table->string('code')->unique();
-            $table->string('plan')->default('free');
-            $table->unsignedBigInteger('owner_id')->nullable()->index();
+        if (!Schema::hasTable('tenants')) {
+            Schema::create('tenants', function (Blueprint $table) {
+                $table->string('id')->primary();
+                // your custom columns may go here
+                $table->string('name')->unique();
+                $table->string('code')->unique();
+                $table->string('plan')->default('free');
+                $table->unsignedBigInteger('owner_id')->nullable()->index();
 
-            $table->json('data')->nullable();
-            $table->timestamps();
-        });
+                $table->json('data')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     /**
