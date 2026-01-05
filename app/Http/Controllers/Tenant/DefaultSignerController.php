@@ -11,6 +11,7 @@ use App\Http\Resources\Tenant\UserResource;
 use App\Http\Resources\Tenant\WorkgroupResource;
 use App\Services\Tenant\DefaultSignerService;
 use Exception;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class DefaultSignerController extends Controller
