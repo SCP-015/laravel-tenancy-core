@@ -8,11 +8,11 @@ use TCPDF;
 class PDFService
 {
     /**
-     * Add multiple signature watermarks to a PDF
+     * Add signature watermark to a PDF (single QR for all signers)
      * 
      * @param string $inputPath Path to original PDF
      * @param string $outputPath Path to save signed PDF
-     * @param array $signatures Array of signature details: usually includes 'text', 'image_path' (optional), 'page', 'x', 'y'
+     * @param array $signatures Array of signature details (now aggregated into single QR)
      * @return string Output path
      */
     public function addWatermarks(string $inputPath, string $outputPath, array $signatures): string
@@ -63,16 +63,16 @@ class PDFService
             // Use the imported page as template
             $pdf->useTemplate($templateId);
             
-            // Add signatures ONLY on the specified page
-            foreach ($signatures as $sig) {
-                // Handle 'last' page
-                $targetPage = $sig['page'] === 'last' ? $pageCount : ($sig['page'] ?? $pageCount);
+            // Add SINGLE signature block on the specified page (aggregated from all signers)
+            if (!empty($signatures)) {
+                $targetPage = $signatures[0]['page'] === 'last' ? $pageCount : ($signatures[0]['page'] ?? $pageCount);
                 
                 if ($pageNo == $targetPage) {
                     // Pass page size for auto-positioning
-                    $sig['page_width'] = $size['width'];
-                    $sig['page_height'] = $size['height'];
-                    $this->drawSignature($pdf, $sig);
+                    $aggregatedSig = $this->aggregateSignatures($signatures);
+                    $aggregatedSig['page_width'] = $size['width'];
+                    $aggregatedSig['page_height'] = $size['height'];
+                    $this->drawSignature($pdf, $aggregatedSig);
                 }
             }
         }
@@ -81,15 +81,72 @@ class PDFService
         
         return $outputPath;
     }
+
+    /**
+     * Aggregate multiple signatures into single QR data
+     * 
+     * @param array $signatures Array of individual signatures
+     * @return array Aggregated signature data with combined QR
+     */
+    protected function aggregateSignatures(array $signatures): array
+    {
+        // Extract signer info from all signatures
+        $signers = [];
+        $latestDate = null;
+        
+        foreach ($signatures as $sig) {
+            $signerInfo = [
+                'name' => $sig['signer_name'] ?? 'Unknown',
+                'email' => $sig['signer_email'] ?? '',
+                'signed_at' => $sig['date'] ?? date('Y-m-d H:i:s'),
+                'certificate_serial' => $sig['cert_serial'] ?? ''
+            ];
+            $signers[] = $signerInfo;
+            
+            // Track latest signature date
+            if (!$latestDate || strtotime($signerInfo['signed_at']) > strtotime($latestDate)) {
+                $latestDate = $signerInfo['signed_at'];
+            }
+        }
+        
+        // Build QR data with all signers
+        $qrData = [
+            'document' => [
+                'title' => $signatures[0]['document_title'] ?? 'Document',
+                'filename' => $signatures[0]['document_filename'] ?? 'document.pdf',
+                'hash' => $signatures[0]['document_hash'] ?? '',
+                'signed_at' => $latestDate ?? date('Y-m-d H:i:s')
+            ],
+            'signers' => $signers,
+            'verification' => [
+                'verified_by' => 'Nusahire E-Sign',
+                'verification_timestamp' => $latestDate ?? date('Y-m-d H:i:s'),
+                'verification_method' => 'Digital Signature with X.509 Certificate'
+            ]
+        ];
+        
+        // Return aggregated signature with QR data
+        return [
+            'qr_data' => json_encode($qrData),
+            'signer_names' => array_map(fn($s) => $s['name'], $signers),
+            'date' => $latestDate ?? date('Y-m-d H:i:s'),
+            'position' => $signatures[0]['position'] ?? 'bottom-right',
+            'page' => $signatures[0]['page'] ?? 'last',
+            'width' => $signatures[0]['width'] ?? 45,
+            'height' => $signatures[0]['height'] ?? 40,
+            'x' => $signatures[0]['x'] ?? null,
+            'y' => $signatures[0]['y'] ?? null
+        ];
+    }
     
     protected function drawSignature(\TCPDF $pdf, array $sig)
     {
         // CRITICAL: Disable auto page break to keep all signature elements together
         $pdf->SetAutoPageBreak(false, 0);
         
-        // Dimensions
-        $w = $sig['width'] ?? 55; // Compact width
-        $h = $sig['height'] ?? 25; // Compact height
+        // Dimensions - Vertical layout (QR on top of text)
+        $w = $sig['width'] ?? 45; // Width for vertical layout
+        $h = $sig['height'] ?? 40; // Height for vertical layout (more space for QR + text)
         
         // Get page dimensions (passed from addWatermarks)
         $pageWidth = $sig['page_width'] ?? 210; // Default A4 width
@@ -121,10 +178,16 @@ class PDFService
         $pdf->SetLineStyle(['width' => 0.1, 'cap' => 'butt', 'join' => 'miter', 'dash' => 0, 'color' => [150, 150, 150]]);
         $pdf->Rect($x, $y, $w, $h, 'D');
         
-        // --- QR Code ---
-        $qrSize = 20; // Smaller, more compact
-        $qrMargin = 2;
-        $textX = $x + $qrSize + ($qrMargin * 2); // Start text after QR
+        // --- Vertical Layout ---
+        // 1. "Digitally Signed by:" at top
+        $pdf->SetFont('helvetica', '', 7);
+        $pdf->SetXY($x + 2, $y + 2);
+        $pdf->Cell($w - 4, 3, "Digitally Signed by:", 0, 1, 'C'); // Centered
+        
+        // 2. QR Code in middle (centered)
+        $qrSize = 20; // QR code size
+        $qrX = $x + ($w - $qrSize) / 2; // Center QR horizontally
+        $qrY = $y + 7; // Position below text
         
         if (!empty($sig['qr_data'])) {
             $style = [
@@ -136,32 +199,20 @@ class PDFService
                 'module_width' => 1, 
                 'module_height' => 1
             ];
-            // Position QR with padding
-            $pdf->write2DBarcode($sig['qr_data'], 'QRCODE,L', $x + $qrMargin, $y + $qrMargin, $qrSize, $qrSize, $style, 'N');
+            // Position QR centered
+            $pdf->write2DBarcode($sig['qr_data'], 'QRCODE,L', $qrX, $qrY, $qrSize, $qrSize, $style, 'N');
         }
         
-        // --- Text Layout ---
-        
-        // 1. "Digitally Signed by" (Small Label)
-        $pdf->SetFont('helvetica', '', 7);
-        $pdf->SetXY($textX, $y + 3);
-        $pdf->Cell(0, 4, "Digitally Signed by:", 0, 0); // ln=0: no line break
-        
-        // 2. Signer Name (Bold & Larger) - Use Cell to avoid page breaks
-        $pdf->SetFont('helvetica', 'B', 9);
-        $pdf->SetXY($textX, $y + 7);
-        $signerName = substr($sig['signer_name'] ?? "Signer", 0, 22); // Max 22 chars to fit in box
-        $pdf->Cell($w - ($textX - $x) - 2, 8, $signerName, 0, 0, 'L');
-        
-        // 3. Info / Validity (Smaller)
+        // 3. "Verified via Nusahire E-Sign" below QR
         $pdf->SetFont('helvetica', '', 6);
-        $pdf->SetXY($textX, $y + 16);
-        $pdf->Cell(0, 3, "Verified via Nusahire E-Sign", 0, 0); // ln=0
+        $pdf->SetXY($x + 2, $y + 30);
+        $pdf->Cell($w - 4, 3, "Verified via Nusahire E-Sign", 0, 1, 'C'); // Centered
         
-        // 4. Date (Small Italic)
+        // 4. Date at bottom
         $pdf->SetFont('helvetica', 'I', 6);
-        $pdf->SetXY($textX, $y + 20);
-        $pdf->Cell(0, 3, "Date: " . ($sig['date'] ?? date('Y-m-d H:i')), 0, 0); // ln=0
+        $pdf->SetXY($x + 2, $y + 34);
+        $dateStr = "Date: " . ($sig['date'] ? date('d-m-Y', strtotime($sig['date'])) : date('d-m-Y'));
+        $pdf->Cell($w - 4, 3, $dateStr, 0, 1, 'C'); // Centered
         
         // Re-enable auto page break
         $pdf->SetAutoPageBreak(true, 15);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\GoogleMobileLoginRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\NusaworkCallbackRequest;
 use App\Http\Requests\Auth\ValidateInviteRequest;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Models\Tenant;
 use App\Models\Tenant\RecruiterInvitation;
 use App\Services\GoogleLoginService;
+use App\Services\GoogleMobileLoginService;
 use App\Services\NusaworkLoginService;
 use App\Services\ProxyTokenService;
 use App\Traits\Loggable;
@@ -34,19 +36,23 @@ class AuthController extends Controller
     private const RULE_NULLABLE_BOOL = 'nullable|bool';
 
     protected GoogleLoginService $googleLoginService;
+    protected GoogleMobileLoginService $googleMobileLoginService;
     protected NusaworkLoginService $nusaworkLoginService;
 
     /**
      * Constructor dengan dependency injection
      * 
      * @param GoogleLoginService $googleLoginService
+     * @param GoogleMobileLoginService $googleMobileLoginService
      * @param NusaworkLoginService $nusaworkLoginService
      */
     public function __construct(
         GoogleLoginService $googleLoginService,
+        GoogleMobileLoginService $googleMobileLoginService,
         NusaworkLoginService $nusaworkLoginService
     ) {
         $this->googleLoginService = $googleLoginService;
+        $this->googleMobileLoginService = $googleMobileLoginService;
         $this->nusaworkLoginService = $nusaworkLoginService;
     }
 
@@ -220,6 +226,42 @@ class AuthController extends Controller
                 'status' => 'error',
                 'message' => __('Failed to login with Google: :error', ['error' => $th->getMessage()]),
             ], 500);
+        }
+    }
+
+    /**
+     * Handle Google Mobile Login
+     *
+     * This endpoint is used to handle login from mobile apps using Google ID Token.
+     * It validates the ID Token from Google Sign-In SDK and returns a Laravel access token.
+     *
+     * @codeCoverageIgnore
+     * @param GoogleMobileLoginRequest $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function googleMobileLogin(GoogleMobileLoginRequest $request)
+    {
+        try {
+            $input = $request->validated();
+
+            $result = $this->googleMobileLoginService->handleMobileLogin(
+                $input['id_token'],
+                $request
+            );
+
+            return response()->json($result, 200);
+        } catch (\Exception $e) {
+            $statusCode = in_array($e->getCode(), [400, 401, 422]) ? $e->getCode() : 500;
+
+            $this->logError('Google mobile login error: ' . $e->getMessage(), [
+                'code' => $e->getCode(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage(),
+            ], $statusCode);
         }
     }
 

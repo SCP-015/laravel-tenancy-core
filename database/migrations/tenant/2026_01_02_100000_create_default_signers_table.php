@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('default_signers', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->string('workgroup')->comment('Nama workgroup/department, e.g. HR, Finance, Legal');
+            $table->foreignUlid('workgroup_id')->constrained('workgroups')->onDelete('cascade');
             $table->unsignedBigInteger('user_id')->comment('User yang menjadi default signer');
             $table->integer('step_order')->default(1)->comment('Urutan signing untuk mode sequential');
             $table->string('role')->nullable()->comment('Role/jabatan signer, e.g. Manager, Director');
@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->index(['workgroup', 'step_order']);
+            $table->index(['workgroup_id', 'step_order']);
         });
     }
 

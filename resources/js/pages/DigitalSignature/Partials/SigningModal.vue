@@ -61,8 +61,8 @@
                   </div>
               </div>
 
-              <label class="label text-error text-xs" v-if="form.errors.certificate_id">
-                  <span>{{ form.errors.certificate_id }}</span>
+              <label class="label text-error text-xs" v-if="errors.certificate_id">
+                  <span>{{ errors.certificate_id }}</span>
               </label>
           </div>
           
@@ -78,9 +78,11 @@
       </div>
 
       <div class="modal-action mt-8 flex justify-end gap-3">
-        <button type="button" class="btn btn-ghost" @click="$emit('close')">Cancel</button>
-        <button type="submit" form="signForm" class="btn btn-primary px-10" :disabled="form.processing || certificates.length === 0">
-            <i class="fas fa-file-contract mr-2"></i> Sign Document
+        <button type="button" class="btn btn-ghost" @click="$emit('close')" :disabled="processing">Cancel</button>
+        <button type="submit" form="signForm" class="btn btn-primary px-10" :disabled="processing || certificates.length === 0">
+            <span v-if="processing" class="loading loading-spinner loading-sm mr-2"></span>
+            <i v-else class="fas fa-file-contract mr-2"></i> 
+            {{ processing ? 'Signing...' : 'Sign Document' }}
         </button>
       </div>
     </div>
@@ -88,8 +90,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { useForm } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
+import { router } from '@inertiajs/vue3';
+
+let mainStore = null;
 
 const props = defineProps({
     signature: Object,
@@ -99,47 +103,77 @@ const props = defineProps({
 const emit = defineEmits(['close']);
 const errorMessage = ref('');
 const isOpen = ref(false);
+const processing = ref(false);
 
-const form = useForm({
+const form = ref({
   agreement: false,
-  certificate_id: props.certificates.length > 0 ? props.certificates[0].id : null,
+  certificate_id: props.certificates && props.certificates.length > 0 ? props.certificates[0].id : null,
+});
+const errors = ref({});
+
+onMounted(async () => {
+  try {
+    const { useMainStore } = await import('../../../stores');
+    mainStore = useMainStore();
+  } catch (error) {
+    console.error('Failed to load mainStore:', error);
+  }
 });
 
 const selectedCert = computed(() => {
-    return props.certificates.find(c => c.id === form.certificate_id);
+    return props.certificates.find(c => c.id === form.value.certificate_id);
 });
 
 const selectCert = (id) => {
-    form.certificate_id = id;
+    form.value.certificate_id = id;
     isOpen.value = false;
 };
 
 const submit = async () => {
-    if (!form.certificate_id) {
+    if (!form.value.certificate_id) {
         errorMessage.value = 'Mohon pilih identitas sertifikat terlebih dahulu.';
         return;
     }
 
-    const hashedPassphrase = '48124d404081da40b791ee3617307062211913346b9f2c3d59664687d7f78c89'; 
+    if (!mainStore) {
+        errorMessage.value = 'System not ready, please try again.';
+        console.error('MainStore not initialized');
+        return;
+    }
+
+    processing.value = true;
+    errorMessage.value = '';
 
     const pathParts = window.location.pathname.split('/');
     const tenantSlug = pathParts[1];
     
     const payload = {
-        passphrase_hash: hashedPassphrase,
-        certificate_id: form.certificate_id,
-        agreement: form.agreement
+        certificate_id: form.value.certificate_id,
+        agreement: form.value.agreement
     };
     
-    form.transform(() => payload).post(`/${tenantSlug}/admin/digital-signature/sign/${props.signature.id}`, {
-        onSuccess: () => {
-            errorMessage.value = '';
+    try {
+        const response = await mainStore.useAPI(
+            `${tenantSlug}/api/digital-signature/sign/${props.signature.id}`,
+            {
+                method: 'POST',
+                body: payload
+            },
+            true
+        );
+
+        if (response.status === 200 || response.status === 201 || response.code === 200 || response.status === 'success') {
             emit('close');
-        },
-        onError: (err) => {
-            errorMessage.value = err.msg || err.passphrase || 'Gagal menandatangani dokumen.';
-            console.error('Signing failed:', err);
+            router.reload({ only: ['pendingSignatures', 'signedDocuments'] });
+        } else {
+            errorMessage.value = response.message || 'Gagal menandatangani dokumen.';
+            errors.value = response.errors || {};
         }
-    });
+    } catch (err) {
+        errorMessage.value = err.message || 'Gagal menandatangani dokumen.';
+        console.error('Signing failed:', err);
+    } finally {
+        processing.value = false;
+    }
 };
 </script>

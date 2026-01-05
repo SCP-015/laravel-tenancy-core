@@ -9,7 +9,7 @@
         <div class="form-control">
             <label class="label"><span class="label-text">Upload Document (PDF)</span></label>
             <input type="file" @change="form.file = $event.target.files[0]" class="file-input file-input-bordered w-full" accept=".pdf" required />
-            <label class="label text-error" v-if="form.errors.file"><span class="label-text-alt">{{ form.errors.file }}</span></label>
+            <label class="label text-error" v-if="errors.file"><span class="label-text-alt">{{ errors.file }}</span></label>
         </div>
         
         <div class="form-control">
@@ -67,8 +67,11 @@
         </div>
 
         <div class="modal-action">
-          <button type="button" class="btn" @click="$emit('close')">Cancel</button>
-          <button type="submit" class="btn btn-primary" :disabled="form.processing">Create Session</button>
+          <button type="button" class="btn" @click="$emit('close')" :disabled="processing">Cancel</button>
+          <button type="submit" class="btn btn-primary" :disabled="processing">
+            <span v-if="processing" class="loading loading-spinner loading-sm mr-2"></span>
+            {{ processing ? 'Creating...' : 'Create Session' }}
+          </button>
         </div>
       </form>
     </div>
@@ -76,7 +79,10 @@
 </template>
 
 <script setup>
-import { useForm, usePage } from '@inertiajs/vue3';
+import { ref, computed, onMounted } from 'vue';
+import { router } from '@inertiajs/vue3';
+
+let mainStore = null;
 
 const emit = defineEmits(['close']);
 const props = defineProps({
@@ -90,25 +96,41 @@ const props = defineProps({
   }
 });
 
-// Get available signers from props
-const users = props.availableSigners;
+const users = computed(() => props.availableSigners || []);
+const processing = ref(false);
+const errors = ref({});
 
-const form = useForm({
+const form = ref({
   file: null,
   title: '',
   mode: 'parallel',
   signers: [
-      { user_id: '', role: '' }
+      { user_id: '', role: '', step_order: 1, is_required: true }
   ]
 });
 
+onMounted(async () => {
+  try {
+    const { useMainStore } = await import('../../../stores');
+    mainStore = useMainStore();
+  } catch (error) {
+    console.error('Failed to load mainStore:', error);
+  }
+});
+
 const addSigner = () => {
-    form.signers.push({ user_id: '', role: '' });
+    form.value.signers.push({ 
+        user_id: '', 
+        role: '', 
+        step_order: form.value.signers.length + 1,
+        is_required: true 
+    });
 };
 
 const removeSigner = (index) => {
-    if (form.signers.length > 1) {
-        form.signers.splice(index, 1);
+    if (form.value.signers.length > 1) {
+        form.value.signers.splice(index, 1);
+        form.value.signers.forEach((s, i) => s.step_order = i + 1);
     }
 };
 
@@ -116,27 +138,67 @@ const applyTemplate = (templateId) => {
     if (!templateId) return;
     const template = props.templates.find(t => t.id === templateId);
     if (template) {
-        // Ambil signer pertama yang sudah ada (biasanya inisiator/kosong)
-        const firstSigner = form.signers[0];
+        const firstSigner = form.value.signers[0];
         
-        // Map steps template menjadi format signer
-        const templateSigners = template.steps.map(step => ({
+        const templateSigners = template.steps.map((step, idx) => ({
             user_id: step.user_id,
-            role: step.role
+            role: step.role,
+            step_order: idx + 2,
+            is_required: true
         }));
 
-        // Gabungkan: [Signer Pertama (User Input), ...Template Signers]
-        form.signers = [firstSigner, ...templateSigners];
-        
-        form.mode = 'sequential'; 
+        form.value.signers = [firstSigner, ...templateSigners];
+        form.value.mode = 'sequential'; 
     }
 };
 
-const submit = () => {
+const submit = async () => {
+    if (!mainStore) {
+        console.error('MainStore not initialized');
+        errors.value = { general: 'System not ready, please try again' };
+        return;
+    }
+
+    processing.value = true;
+    errors.value = {};
+
     const pathParts = window.location.pathname.split('/');
     const tenantSlug = pathParts[1];
-    form.post(`/${tenantSlug}/admin/digital-signature/session`, {
-        onSuccess: () => emit('close'),
+    
+    const formData = new FormData();
+    formData.append('file', form.value.file);
+    formData.append('title', form.value.title);
+    formData.append('mode', form.value.mode);
+    
+    // Properly format array for Laravel multipart/form-data
+    form.value.signers.forEach((signer, index) => {
+        formData.append(`signers[${index}][user_id]`, signer.user_id);
+        formData.append(`signers[${index}][role]`, signer.role);
+        formData.append(`signers[${index}][step_order]`, signer.step_order);
+        formData.append(`signers[${index}][is_required]`, signer.is_required ? 1 : 0);
     });
+
+    try {
+        const response = await mainStore.useAPI(
+            `${tenantSlug}/api/digital-signature/session`,
+            {
+                method: 'POST',
+                body: formData
+            },
+            true
+        );
+
+        if (response.status === 201 || response.status === 200 || response.code === 201 || response.status === 'success') {
+            emit('close');
+            router.reload({ only: ['pendingSignatures', 'signedDocuments', 'availableSigners'] });
+        } else {
+            errors.value = response.errors || {};
+        }
+    } catch (err) {
+        console.error('Create session failed:', err);
+        errors.value = { general: err.message || 'Failed to create session' };
+    } finally {
+        processing.value = false;
+    }
 };
 </script>

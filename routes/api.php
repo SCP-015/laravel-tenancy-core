@@ -29,6 +29,11 @@ Route::prefix('auth')->group(function () {
         '/google/callback',
         [Controllers\Auth\AuthController::class, 'handleGoogleCallback']
     );
+    // Endpoint untuk Google Mobile Login (ID Token dari mobile app)
+    Route::post(
+        '/google/mobile',
+        [Controllers\Auth\AuthController::class, 'googleMobileLogin']
+    );
     Route::post('/nusawork/callback', [Controllers\Auth\AuthController::class, 'nusaworkCallback']);
 
     // Rute yang dilindungi

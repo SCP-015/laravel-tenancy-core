@@ -16,9 +16,6 @@
             <button @click="activeTab = 'certificates'" :class="['tab tab-sm', activeTab === 'certificates' ? 'tab-active' : '']">Certificates</button>
         </div>
         <div class="flex gap-2">
-             <button v-if="activeTab === 'certificates' && isAdmin" @click="showIssueCertModal = true" class="btn btn-xs btn-primary">
-                + Issue New Cert
-             </button>
              <button v-if="isAdmin && !hasCA" @click="showCreateCAModal = true" class="btn btn-xs btn-neutral">Setup Root CA</button>
         </div>
     </div>
@@ -221,8 +218,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import dayjs from 'dayjs';
 import CreateCAModal from './Partials/CreateCAModal.vue';
 import IssueCertificateModal from './Partials/IssueCertificateModal.vue';
@@ -269,6 +265,11 @@ const showCreateSessionModal = ref(false);
 const selectedSignature = ref(null);
 
 const formatDate = (date) => dayjs(date).format('DD MMM YYYY');
+
+// Check if user has an active certificate
+const hasActiveCertificate = computed(() => {
+  return props.myCertificates && props.myCertificates.length > 0;
+});
 
 const openSigningModal = (sig) => {
     selectedSignature.value = sig;

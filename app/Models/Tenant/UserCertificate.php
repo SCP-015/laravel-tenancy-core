@@ -16,6 +16,7 @@ class UserCertificate extends Model
         'valid_from' => 'datetime',
         'valid_to' => 'datetime',
         'is_revoked' => 'boolean',
+        'is_active' => 'boolean',
     ];
     
     /**
@@ -25,6 +26,7 @@ class UserCertificate extends Model
         'certificate_path',
         'private_key_path',
         'passphrase',
+        'passphrase_hash',
         'serial_number',
     ];
     
@@ -35,6 +37,48 @@ class UserCertificate extends Model
     
     public function user(): BelongsTo 
     {
-        return $this->belongsTo(\App\Models\User::class, 'user_id');
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Check if certificate is currently valid (not expired and already started)
+     */
+    public function isValid(): bool
+    {
+        $now = now();
+        return $now >= $this->valid_from && $now <= $this->valid_to;
+    }
+
+    /**
+     * Check if certificate is expired
+     */
+    public function isExpired(): bool
+    {
+        return now() > $this->valid_to;
+    }
+
+    /**
+     * Check if certificate is not yet valid
+     */
+    public function isNotYetValid(): bool
+    {
+        return now() < $this->valid_from;
+    }
+
+    /**
+     * Get certificate status
+     */
+    public function getStatus(): string
+    {
+        if ($this->is_revoked) {
+            return 'revoked';
+        }
+        if ($this->isExpired()) {
+            return 'expired';
+        }
+        if ($this->isNotYetValid()) {
+            return 'not_yet_valid';
+        }
+        return 'valid';
     }
 }

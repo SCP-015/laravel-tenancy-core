@@ -15,7 +15,7 @@ class DefaultSigner extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'workgroup',
+        'workgroup_id',
         'user_id',
         'step_order',
         'role',
@@ -36,11 +36,19 @@ class DefaultSigner extends Model
     }
 
     /**
+     * Get the workgroup.
+     */
+    public function workgroup(): BelongsTo
+    {
+        return $this->belongsTo(Workgroup::class);
+    }
+
+    /**
      * Scope untuk filter berdasarkan workgroup.
      */
-    public function scopeForWorkgroup($query, string $workgroup)
+    public function scopeForWorkgroup($query, string $workgroupId)
     {
-        return $query->where('workgroup', $workgroup);
+        return $query->where('workgroup_id', $workgroupId);
     }
 
     /**
@@ -54,9 +62,9 @@ class DefaultSigner extends Model
     /**
      * Get signers ordered by step_order untuk sequential signing.
      */
-    public static function getSignersForWorkgroup(string $workgroup): \Illuminate\Database\Eloquent\Collection
+    public static function getSignersForWorkgroup(string $workgroupId): \Illuminate\Database\Eloquent\Collection
     {
-        return static::where('workgroup', $workgroup)
+        return static::where('workgroup_id', $workgroupId)
             ->where('is_active', true)
             ->orderBy('step_order')
             ->with('user')
@@ -66,8 +74,8 @@ class DefaultSigner extends Model
     /**
      * Get distinct workgroups.
      */
-    public static function getWorkgroups(): array
+    public static function getWorkgroups(): \Illuminate\Database\Eloquent\Collection
     {
-        return static::distinct()->pluck('workgroup')->toArray();
+        return Workgroup::where('is_active', true)->get();
     }
 }

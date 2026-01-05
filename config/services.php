@@ -46,6 +46,7 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI'),
+        'mobile_client_id' => env('GOOGLE_MOBILE_CLIENT_ID', env('GOOGLE_CLIENT_ID')),
     ],
 
     'nusawork' => [

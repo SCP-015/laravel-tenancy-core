@@ -148,7 +148,7 @@ Route::middleware(['auth:api'])->group(function () use ($integer) {
         Route::get('/', [Tenant\DefaultSignerController::class, 'index'])->name('index');
         Route::get('/users', [Tenant\DefaultSignerController::class, 'getAvailableUsers'])->name('users');
         Route::get('/workgroups', [Tenant\DefaultSignerController::class, 'getWorkgroups'])->name('workgroups');
-        Route::get('/workgroup/{workgroup}', [Tenant\DefaultSignerController::class, 'getSignersForWorkgroup'])->name('by-workgroup');
+        Route::get('/workgroup/{workgroup_id}', [Tenant\DefaultSignerController::class, 'getSignersForWorkgroup'])->name('by-workgroup');
         Route::post('/', [Tenant\DefaultSignerController::class, 'store'])->name('store');
         Route::put('/{id}', [Tenant\DefaultSignerController::class, 'update'])->name('update');
         Route::delete('/{id}', [Tenant\DefaultSignerController::class, 'destroy'])->name('destroy');
@@ -177,6 +177,9 @@ Route::middleware(['auth:api'])->group(function () use ($integer) {
         
         // 7. Download Document
         Route::get('/download/{documentId}', [Tenant\DigitalSignatureController::class, 'downloadDocument'])->name('download');
+        
+        // 8. Scan QR Code (untuk test di localhost)
+        Route::post('/scan-qr', [Tenant\DigitalSignatureController::class, 'scanQRCode'])->name('scan-qr');
     });
 });
 

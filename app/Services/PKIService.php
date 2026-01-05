@@ -85,13 +85,15 @@ class PKIService
 
     /**
      * Create a User Certificate signed by Root CA
+     * Default validity: 365 days (1 year)
      */
     public function createUserCertificate(
         string $caCertPem, 
         string $caKeyPem, 
         string $commonName, 
         string $email, 
-        string $passphrase
+        string $passphrase,
+        int $validDays = 365
     ): array
     {
         // 1. Generate User Private Key
@@ -117,7 +119,7 @@ class PKIService
         // 4. Sign with CA
         // Use random serial number
         $serial = (int) hexdec(bin2hex(random_bytes(4))); // Use 4 bytes to avoid overflow
-        $userCert = openssl_csr_sign($csr, $caCert, $caKey, 365, $this->config, $serial);
+        $userCert = openssl_csr_sign($csr, $caCert, $caKey, $validDays, $this->config, $serial);
 
         if (!$userCert) {
             throw new Exception("Failed to sign user certificate: " . openssl_error_string());
