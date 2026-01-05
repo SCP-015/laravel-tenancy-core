@@ -49,21 +49,7 @@ class DigitalSignatureService
             })
             ->values() : collect([]);
 
-        $allCertificates = $isAdmin
-            ? UserCertificate::with('user')->get()->map(function($cert) {
-                return [
-                    'id' => $cert->id,
-                    'user_id' => $cert->user_id,
-                    'user_name' => $cert->user ? $cert->user->name : 'Unknown User',
-                    'label' => $cert->label,
-                    'common_name' => $cert->common_name,
-                    'email' => $cert->email,
-                    'valid_from' => $cert->valid_from,
-                    'valid_to' => $cert->valid_to,
-                    'is_revoked' => $cert->is_revoked,
-                ];
-            })
-            : collect([]);
+        $allCertificatesRaw = $isAdmin ? UserCertificate::with('user')->get() : collect([]);
 
         $userIdsWithCerts = UserCertificate::where('is_revoked', false)->pluck('user_id')->unique()->toArray();
         $usersWithCerts = TenantUser::all()->map(function($user) use ($userIdsWithCerts) {
@@ -75,37 +61,12 @@ class DigitalSignatureService
             ];
         })->values();
 
-        $sanitizedCerts = $myCerts->map(function($cert) {
-            return [
-                'id' => $cert->id,
-                'label' => $cert->label,
-                'common_name' => $cert->common_name,
-                'email' => $cert->email,
-                'valid_from' => $cert->valid_from,
-                'valid_to' => $cert->valid_to,
-                'is_revoked' => $cert->is_revoked,
-            ];
-        });
-
         $signedDocs = $currentUser ? Document::whereHas('signatures', function($sq) use ($currentUser) {
             $sq->where('user_id', $currentUser->id)->where('status', 'signed');
         })
             ->where('status', 'signed')
             ->orderBy('updated_at', 'desc')
-            ->get()
-            ->map(function($doc) {
-                return [
-                    'id' => $doc->id,
-                    'title' => $doc->title,
-                    'filename' => $doc->filename,
-                    'original_hash' => $doc->original_hash,
-                    'current_hash' => $doc->current_hash,
-                    'metadata' => $doc->metadata,
-                    'signed_at' => $doc->updated_at->toDateTimeString(),
-                    'download_url' => route('digital-signature.download', ['tenant' => tenant('id'), 'document' => $doc->id]),
-                    'verify_url' => route('digital-signature.verify', ['tenant' => tenant('id'), 'document' => $doc->id]),
-                ];
-            }) : collect([]);
+            ->get() : collect([]);
 
         return [
             'has_ca' => (bool)$ca,
@@ -116,13 +77,14 @@ class DigitalSignatureService
                 'email' => $currentUser->email,
                 'is_admin' => $isAdmin
             ] : null,
-            'certificates' => $sanitizedCerts,
-            'all_certificates' => $allCertificates,
+            'certificates' => $myCerts,
+            'all_certificates_raw' => $allCertificatesRaw,
             'pending_signatures' => $pendingSignatures,
             'signed_documents' => $signedDocs,
             'available_signers' => $usersWithCerts,
         ];
     }
+
 
     public function createCA(array $data): CertificateAuthority
     {

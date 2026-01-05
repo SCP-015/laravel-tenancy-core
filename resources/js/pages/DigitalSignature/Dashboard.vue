@@ -66,7 +66,7 @@
             <thead>
               <tr>
                 <th>Document</th>
-                <th>Session</th>
+                <th>Signing Mode</th>
                 <th>Role</th>
                 <th>Action</th>
               </tr>
@@ -74,11 +74,11 @@
             <tbody>
               <tr v-for="sig in pendingSignatures" :key="sig.id">
                 <td>
-                   <div class="font-bold">{{ sig.document.title }}</div>
-                   <div class="text-xs opacity-50">{{ sig.document.filename }}</div>
+                   <div class="font-bold">{{ sig.document?.title || 'No Title' }}</div>
+                   <div class="text-xs opacity-50">{{ sig.document?.filename || '-' }}</div>
                 </td>
                 <td>
-                  <div class="badge badge-ghost">{{ sig.signing_session.mode }}</div>
+                  <div class="badge badge-ghost capitalize">{{ sig.signing_session?.mode || '-' }}</div>
                 </td>
                 <td>{{ sig.role }}</td>
                 <td>

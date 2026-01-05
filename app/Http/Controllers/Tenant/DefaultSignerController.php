@@ -6,6 +6,9 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tenant\DefaultSigner\StoreDefaultSignerRequest;
 use App\Http\Requests\Tenant\DefaultSigner\UpdateDefaultSignerRequest;
+use App\Http\Resources\Tenant\DefaultSignerResource;
+use App\Http\Resources\Tenant\UserResource;
+use App\Http\Resources\Tenant\WorkgroupResource;
 use App\Services\Tenant\DefaultSignerService;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -19,44 +22,29 @@ class DefaultSignerController extends Controller
         $this->defaultSignerService = $defaultSignerService;
     }
 
-    public function index()
+    public function index(Request $request, $tenant)
     {
-        try {
-            $signers = $this->defaultSignerService->getAllGroupedByWorkgroup();
-            return ApiResponse::success($signers);
-        } catch (Exception $e) {
-            Log::error('Get default signers error: ' . $e->getMessage());
-            return response()->json(['message' => 'Failed to retrieve signers'], 500);
-        }
+        $workgroups = $this->defaultSignerService->getAllGroupedByWorkgroup();
+        return ApiResponse::success(WorkgroupResource::collection($workgroups)->resolve());
     }
 
-    public function getAvailableUsers()
+    public function getAvailableUsers(Request $request, $tenant)
     {
-        try {
-            $users = $this->defaultSignerService->getAvailableUsers();
-            return ApiResponse::success($users);
-        } catch (Exception $e) {
-            Log::error('Get available users error: ' . $e->getMessage());
-            return response()->json(['message' => 'Failed to retrieve users'], 500);
-        }
+        $users = $this->defaultSignerService->getAvailableUsers();
+        return ApiResponse::success(UserResource::collection($users)->resolve());
     }
 
-    public function getWorkgroups()
+    public function getWorkgroups(Request $request, $tenant)
     {
-        try {
-            $workgroups = $this->defaultSignerService->getWorkgroups();
-            return ApiResponse::success($workgroups);
-        } catch (Exception $e) {
-            Log::error('Get workgroups error: ' . $e->getMessage());
-            return response()->json(['message' => 'Failed to retrieve workgroups'], 500);
-        }
+        $workgroups = $this->defaultSignerService->getWorkgroups();
+        return ApiResponse::success(WorkgroupResource::collection($workgroups)->resolve());
     }
 
-    public function store(StoreDefaultSignerRequest $request)
+    public function store(StoreDefaultSignerRequest $request, $tenant)
     {
         try {
             $signer = $this->defaultSignerService->store($request->validated());
-            return ApiResponse::success($signer->load(['user', 'workgroup']), 'Default signer berhasil ditambahkan.', 201);
+            return ApiResponse::success(new DefaultSignerResource($signer->load(['user', 'workgroup'])), 'Default signer berhasil ditambahkan.', 201);
         } catch (Exception $e) {
             Log::error('Store default signer error: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 422);
@@ -67,7 +55,7 @@ class DefaultSignerController extends Controller
     {
         try {
             $signer = $this->defaultSignerService->update((string)$id, $request->validated());
-            return ApiResponse::success($signer, 'Default signer berhasil diperbarui.');
+            return ApiResponse::success(new DefaultSignerResource($signer), 'Default signer berhasil diperbarui.');
         } catch (Exception $e) {
             Log::error('Update default signer error: ' . $e->getMessage());
             
@@ -79,7 +67,7 @@ class DefaultSignerController extends Controller
         }
     }
 
-    public function destroy($tenant, $id)
+    public function destroy(Request $request, $tenant, $id)
     {
         try {
             $this->defaultSignerService->delete((string)$id);
@@ -95,14 +83,10 @@ class DefaultSignerController extends Controller
         }
     }
 
-    public function getSignersForWorkgroup($tenant, $workgroupId)
+    public function getSignersForWorkgroup(Request $request, $tenant, $workgroupId)
     {
-        try {
-            $signers = $this->defaultSignerService->getSignersForWorkgroup((int)$workgroupId);
-            return ApiResponse::success($signers);
-        } catch (Exception $e) {
-            Log::error('Get signers for workgroup error: ' . $e->getMessage());
-            return response()->json(['message' => 'Failed to retrieve signers'], 500);
-        }
+        $signers = $this->defaultSignerService->getSignersForWorkgroup((string)$workgroupId);
+        return ApiResponse::success(DefaultSignerResource::collection($signers)->resolve());
     }
+
 }

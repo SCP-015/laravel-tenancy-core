@@ -27,51 +27,81 @@ class DocumentSigningService
 
     public function createSession(array $data, $file, TenantUser $currentUser): SigningSession
     {
-        return DB::transaction(function() use ($data, $file, $currentUser) {
-            $tenantId = tenant('id');
-            $originalPath = $file->store("tenants/{$tenantId}/documents", 'public');
-            $originalHash = hash_file('sha256', Storage::disk('public')->path($originalPath));
-            $metadata = [
-                'size' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
-            ];
+        Log::info('DocumentSigningService: Start creating session', [
+            'user_id' => $currentUser->id,
+            'title' => $data['title'],
+            'mode' => $data['mode'],
+            'signer_count' => count($data['signers'] ?? [])
+        ]);
 
-            $doc = Document::create([
-                'user_id' => $currentUser->id,
-                'title' => $data['title'],
-                'filename' => $file->getClientOriginalName(),
-                'original_file_path' => $originalPath,
-                'original_hash' => $originalHash,
-                'status' => 'pending',
-                'metadata' => $metadata,
-            ]);
+        try {
+            return DB::transaction(function() use ($data, $file, $currentUser) {
+                $tenantId = tenant('id');
+                $originalPath = $file->store("tenants/{$tenantId}/documents", 'public');
+                Log::info('DocumentSigningService: File stored', ['path' => $originalPath]);
 
-            $session = SigningSession::create([
-                'document_id' => $doc->id,
-                'title' => $data['title'],
-                'mode' => $data['mode'],
-                'status' => 'in_progress',
-                'created_by' => $currentUser->id,
-                'current_step_order' => 1,
-            ]);
+                $fullPath = Storage::disk('public')->path($originalPath);
+                if (!file_exists($fullPath)) {
+                  Log::error('DocumentSigningService: File not found after store', ['fullPath' => $fullPath]);
+                  throw new Exception('Failed to store document file.');
+                }
 
-            foreach ($data['signers'] as $signer) {
-                Signature::create([
-                    'signing_session_id' => $session->id,
-                    'user_id' => $signer['user_id'],
-                    'document_id' => $doc->id,
-                    'role' => $signer['role'],
-                    'step_order' => $signer['step_order'],
-                    'is_required' => $signer['is_required'] ?? true,
+                $originalHash = hash_file('sha256', $fullPath);
+                $metadata = [
+                    'size' => $file->getSize(),
+                    'mime_type' => $file->getMimeType(),
+                ];
+
+                $doc = Document::create([
+                    'user_id' => $currentUser->id,
+                    'title' => $data['title'],
+                    'filename' => $file->getClientOriginalName(),
+                    'original_file_path' => $originalPath,
+                    'original_hash' => $originalHash,
                     'status' => 'pending',
+                    'metadata' => $metadata,
                 ]);
-            }
+                Log::info('DocumentSigningService: Document created', ['doc_id' => $doc->id]);
 
-            return $session->load(['document', 'signatures.user']);
-        });
+                $session = SigningSession::create([
+                    'document_id' => $doc->id,
+                    'title' => $data['title'],
+                    'mode' => $data['mode'],
+                    'status' => 'in_progress',
+                    'created_by' => $currentUser->id,
+                    'current_step_order' => 1,
+                ]);
+                Log::info('DocumentSigningService: Session created', ['session_id' => $session->id]);
+
+                foreach ($data['signers'] as $index => $signer) {
+                    $sig = Signature::create([
+                        'signing_session_id' => $session->id,
+                        'user_id' => $signer['user_id'],
+                        'document_id' => $doc->id,
+                        'role' => $signer['role'],
+                        'step_order' => $signer['step_order'],
+                        'is_required' => $signer['is_required'] ?? true,
+                        'status' => 'pending',
+                    ]);
+                    Log::info("DocumentSigningService: Signature created #{$index}", ['sig_id' => $sig->id]);
+                }
+
+                Log::info('DocumentSigningService: Transaction completed successfully');
+                return $session->load(['document', 'signatures.user']);
+            });
+        } catch (Exception $e) {
+            Log::error('DocumentSigningService: Exception caught', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            throw $e;
+        }
     }
 
-    public function signDocument(int $signatureId, int $certificateId, TenantUser $currentUser): array
+
+
+    public function executeSigning(int $signatureId, int $certificateId, TenantUser $currentUser): Signature
     {
         $signature = Signature::with(['signingSession', 'document'])->findOrFail($signatureId);
 
@@ -99,7 +129,7 @@ class DocumentSigningService
 
         $passphraseHash = $cert->passphrase_hash;
         if (!$passphraseHash) {
-            Log::error("signDocument: Certificate missing passphrase_hash", [
+            Log::error("executeSigning: Certificate missing passphrase_hash", [
                 'cert_id' => $cert->id,
                 'user_id' => $currentUser->id,
             ]);
@@ -141,7 +171,7 @@ class DocumentSigningService
                 throw new Exception("Signing failed. Check certificate.");
             }
         } catch (Exception $e) {
-            Log::error("signDocument: PKI signing failed", [
+            Log::error("executeSigning: PKI signing failed", [
                 'error' => $e->getMessage(),
                 'cert_id' => $cert->id,
             ]);
@@ -195,14 +225,10 @@ class DocumentSigningService
                 $session->update(['status' => 'completed']);
             }
 
-            return [
-                'signature_id' => $signature->id,
-                'document_id' => $doc->id,
-                'status' => 'signed',
-                'signed_at' => $signature->signed_at->toDateTimeString(),
-            ];
+            return $signature;
         });
     }
+
 
     protected function addWatermarkAndQR(Document $doc, Signature $signature, UserCertificate $cert, TenantUser $user): string
     {

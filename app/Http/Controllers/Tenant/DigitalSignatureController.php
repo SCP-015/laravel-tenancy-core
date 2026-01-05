@@ -8,12 +8,14 @@ use App\Http\Requests\Tenant\DigitalSignature\CreateCARequest;
 use App\Http\Requests\Tenant\DigitalSignature\CreateSessionRequest;
 use App\Http\Requests\Tenant\DigitalSignature\IssueCertificateRequest;
 use App\Http\Requests\Tenant\DigitalSignature\ScanQRRequest;
-use App\Http\Requests\Tenant\DigitalSignature\SetDefaultSignerRequest;
 use App\Http\Requests\Tenant\DigitalSignature\SignDocumentRequest;
 use App\Http\Requests\Tenant\DigitalSignature\VerifyDocumentRequest;
 use App\Http\Resources\Tenant\CertificateAuthorityResource;
+use App\Http\Resources\Tenant\DocumentResource;
+use App\Http\Resources\Tenant\SignatureResource;
 use App\Http\Resources\Tenant\SigningSessionResource;
 use App\Http\Resources\Tenant\UserCertificateResource;
+use App\Http\Resources\Tenant\VerifiedDocumentResource;
 use App\Models\Tenant\Document;
 use App\Models\Tenant\User as TenantUser;
 use App\Services\Tenant\DefaultSignerService;
@@ -48,69 +50,47 @@ class DigitalSignatureController extends Controller
     protected function getCurrentTenantUser(): ?TenantUser
     {
         $centralUser = auth('api')->user();
+        if (!$centralUser) return null;
 
-        if (!$centralUser) {
-            Log::warning('DigitalSignatureController: No authenticated user found in API guard');
-            return null;
-        }
-
-        $tenantUser = TenantUser::where('global_id', $centralUser->global_id)->first();
-
-        if (!$tenantUser) {
-            Log::warning('DigitalSignatureController: User not found in tenant database', [
-                'central_user_id' => $centralUser->id,
-                'global_id' => $centralUser->global_id,
-                'tenant_id' => tenant('id'),
-            ]);
-            return null;
-        }
-
-        return $tenantUser;
+        return TenantUser::where('global_id', $centralUser->global_id)->first();
     }
 
-    public function index(Request $request, $tenant = null)
+    public function index(Request $request, $tenant)
     {
         try {
             $currentUser = $this->getCurrentTenantUser();
             $data = $this->digitalSignatureService->getDashboard($currentUser);
 
             if ($request->wantsJson()) {
-                return response()->json($data);
+                return ApiResponse::success([
+                    'has_ca' => $data['has_ca'],
+                    'ca_info' => $data['ca_info'],
+                    'user' => $data['user'],
+                    'certificates' => UserCertificateResource::collection($data['certificates'])->resolve(),
+                    'pending_signatures' => SignatureResource::collection($data['pending_signatures'])->resolve(),
+                    'signed_documents' => DocumentResource::collection($data['signed_documents'])->resolve(),
+                    'available_signers' => $data['available_signers'],
+                    'all_certificates' => UserCertificateResource::collection($data['all_certificates_raw'])->resolve(),
+                ]);
             }
-            $ca = $data['has_ca'] ? \App\Models\Tenant\CertificateAuthority::where('is_revoked', false)->first() : null;
 
             return Inertia::render('DigitalSignature/Dashboard', [
-                'meta' => [
-                    'requiresAuth' => true,
-                    'parent_menu' => 'digital-signature'
-                ],
+                'meta' => ['requiresAuth' => true, 'parent_menu' => 'digital-signature'],
                 'hasCA' => $data['has_ca'],
-                'caIncluded' => $ca ? [
-                    'id' => $ca->id,
-                    'name' => $ca->name,
-                    'common_name' => $ca->common_name,
-                    'valid_from' => $ca->valid_from,
-                    'valid_to' => $ca->valid_to,
-                ] : null,
-                'myCertificates' => $data['certificates'],
-                'pendingSignatures' => $data['pending_signatures'],
-                'signedDocuments' => $data['signed_documents'],
+                'caIncluded' => $data['ca_info'],
+                'myCertificates' => UserCertificateResource::collection($data['certificates'])->resolve(),
+                'pendingSignatures' => SignatureResource::collection($data['pending_signatures'])->resolve(),
+                'signedDocuments' => DocumentResource::collection($data['signed_documents'])->resolve(),
                 'availableSigners' => $data['available_signers'],
-                'templates' => [],
-                'allCertificates' => $data['all_certificates'],
+                'allCertificates' => UserCertificateResource::collection($data['all_certificates_raw'])->resolve(),
                 'isAdmin' => $data['user']['is_admin'] ?? false,
-                'auth' => [
-                    'user' => $currentUser
-                ]
+                'auth' => ['user' => $currentUser]
             ]);
         } catch (Exception $e) {
             Log::error('Dashboard error: ' . $e->getMessage());
-            
-            if ($request->wantsJson()) {
-                return response()->json(['message' => 'Failed to load dashboard'], 500);
-            }
-
-            return back()->withErrors(['msg' => 'Failed to load dashboard.']);
+            return $request->wantsJson() 
+                ? response()->json(['message' => 'Failed to load dashboard'], 500)
+                : back()->withErrors(['msg' => 'Failed to load dashboard.']);
         }
     }
 
@@ -119,28 +99,19 @@ class DigitalSignatureController extends Controller
         try {
             $currentUser = $this->getCurrentTenantUser();
             if (!$currentUser || (!$currentUser->isSuperAdmin() && !$currentUser->isAdmin())) {
-                if ($request->wantsJson()) {
-                    return response()->json(['message' => 'Unauthorized'], 403);
-                }
-                return back()->withErrors(['msg' => 'Only administrators can create Certificate Authority.']);
+                throw new Exception('Unauthorized: Only administrators can create CA.');
             }
 
             $ca = $this->digitalSignatureService->createCA($request->validated());
-
-            if ($request->wantsJson()) {
-                return ApiResponse::success(new CertificateAuthorityResource($ca), 'Certificate Authority created successfully', 201);
-            }
-
-            return redirect()->route('digital-signature.index', ['tenant' => tenant('id')])
-                ->with('success', 'Certificate Authority created successfully.');
+            
+            return $request->wantsJson()
+                ? ApiResponse::success(new CertificateAuthorityResource($ca), 'CA created successfully', 201)
+                : redirect()->route('digital-signature.index', ['tenant' => tenant('id')])->with('success', 'CA created successfully.');
         } catch (Exception $e) {
             Log::error('Create CA error: ' . $e->getMessage());
-            
-            if ($request->wantsJson()) {
-                return response()->json(['message' => $e->getMessage()], 400);
-            }
-
-            return back()->withErrors(['msg' => $e->getMessage()]);
+            return $request->wantsJson()
+                ? response()->json(['message' => $e->getMessage()], 400)
+                : back()->withErrors(['msg' => $e->getMessage()]);
         }
     }
 
@@ -148,40 +119,22 @@ class DigitalSignatureController extends Controller
     {
         try {
             $currentUser = $this->getCurrentTenantUser();
-            if (!$currentUser) {
-                if ($request->wantsJson()) {
-                    return response()->json(['message' => 'User not found'], 404);
-                }
-                return back()->withErrors(['msg' => 'User not found in tenant database.']);
-            }
-
             $userId = $request->input('user_id') ?? $currentUser->id;
             
-            if ($userId != $currentUser->id) {
-                if (!$currentUser->isSuperAdmin() && !$currentUser->isAdmin()) {
-                    if ($request->wantsJson()) {
-                        return response()->json(['message' => 'Unauthorized'], 403);
-                    }
-                    return back()->withErrors(['msg' => 'You can only issue certificates for yourself.']);
-                }
+            if ($userId != $currentUser->id && (!$currentUser->isSuperAdmin() && !$currentUser->isAdmin())) {
+                throw new Exception('Unauthorized: You can only issue certificates for yourself.');
             }
 
             $certificate = $this->digitalSignatureService->issueCertificate($request->validated(), $userId);
 
-            if ($request->wantsJson()) {
-                return ApiResponse::success(new UserCertificateResource($certificate), 'Certificate issued successfully', 201);
-            }
-
-            return redirect()->route('digital-signature.index', ['tenant' => tenant('id')])
-                ->with('success', 'Certificate issued successfully.');
+            return $request->wantsJson()
+                ? ApiResponse::success(new UserCertificateResource($certificate), 'Certificate issued successfully', 201)
+                : redirect()->route('digital-signature.index', ['tenant' => tenant('id')])->with('success', 'Certificate issued successfully.');
         } catch (Exception $e) {
             Log::error('Issue certificate error: ' . $e->getMessage());
-            
-            if ($request->wantsJson()) {
-                return response()->json(['message' => $e->getMessage()], 400);
-            }
-
-            return back()->withErrors(['msg' => $e->getMessage()]);
+            return $request->wantsJson()
+                ? response()->json(['message' => $e->getMessage()], 400)
+                : back()->withErrors(['msg' => $e->getMessage()]);
         }
     }
 
@@ -189,11 +142,7 @@ class DigitalSignatureController extends Controller
     {
         try {
             $currentUser = $this->getCurrentTenantUser();
-            if (!$currentUser) {
-                return response()->json(['message' => 'User not found'], 404);
-            }
-
-            if (!$currentUser->isSuperAdmin() && !$currentUser->isAdmin()) {
+            if (!$currentUser || (!$currentUser->isSuperAdmin() && !$currentUser->isAdmin())) {
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
 
@@ -210,69 +159,46 @@ class DigitalSignatureController extends Controller
         }
     }
 
-    public function signDocument(SignDocumentRequest $request, $tenant, string $signatureId)
+    public function signDocument(SignDocumentRequest $request, $tenant, $signatureId)
     {
         try {
             $currentUser = $this->getCurrentTenantUser();
-            if (!$currentUser) {
-                return response()->json(['message' => 'User not found'], 404);
-            }
-
-            $result = $this->documentSigningService->signDocument(
+            $signature = $this->documentSigningService->executeSigning(
                 (int)$signatureId,
                 (int)$request->input('certificate_id'),
                 $currentUser
             );
 
-            return ApiResponse::success($result, 'Document signed successfully');
+            return ApiResponse::success(new SignatureResource($signature), 'Document signed successfully');
         } catch (Exception $e) {
             Log::error('Sign document error: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }
 
-    public function downloadDocument($tenant, string $documentId)
+    public function downloadDocument($tenant, $documentId)
     {
         $doc = Document::findOrFail($documentId);
-        
         $filePath = $doc->signed_file_path ?? $doc->original_file_path;
-        $fullPath = Storage::disk('public')->path($filePath);
+        
+        // Use local fallback if not in public
+        $fullPath = Storage::disk('public')->exists($filePath) 
+            ? Storage::disk('public')->path($filePath)
+            : Storage::disk('local')->path($filePath);
 
         return response()->download($fullPath, $doc->filename);
     }
 
-    public function verifyDocument($tenant, string $documentId)
+    public function verifyDocument($tenant, $documentId)
     {
         $doc = Document::with(['signatures.user', 'signatures.userCertificate'])->findOrFail($documentId);
-        
-        $signatures = $doc->signatures->map(function($sig) {
-            $cert = $sig->userCertificate;
-            return [
-                'signer' => $sig->user->name,
-                'signed_at' => $sig->signed_at,
-                'certificate_serial' => $cert->serial_number,
-                'certificate_valid_from' => $cert->valid_from,
-                'certificate_valid_to' => $cert->valid_to,
-            ];
-        });
-
-        return response()->json([
-            'document' => [
-                'title' => $doc->title,
-                'filename' => $doc->filename,
-                'status' => $doc->status,
-            ],
-            'signatures' => $signatures
-        ]);
+        return ApiResponse::success((new VerifiedDocumentResource($doc))->resolve());
     }
 
     public function verifyPage($tenant)
     {
         return Inertia::render('DigitalSignature/Verify', [
-            'meta' => [
-                'requiresAuth' => true,
-                'parent_menu' => 'digital-signature'
-            ]
+            'meta' => ['requiresAuth' => true, 'parent_menu' => 'digital-signature']
         ]);
     }
 
@@ -280,41 +206,26 @@ class DigitalSignatureController extends Controller
     {
         try {
             $result = $this->documentVerificationService->verifyUploadedFile($request->file('file'));
-
             if ($request->wantsJson()) {
-                $statusCode = $result['success'] ? 200 : 400;
-                return response()->json($result, $statusCode);
+                return response()->json($result, $result['success'] ? 200 : 400);
             }
-
-            return Inertia::render('DigitalSignature/Verify', [
-                'uploadResult' => $result
-            ]);
+            return Inertia::render('DigitalSignature/Verify', ['uploadResult' => $result]);
         } catch (Exception $e) {
             Log::error('Verify uploaded file error: ' . $e->getMessage());
-            
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Verification failed',
-                    'description' => $e->getMessage()
-                ], 500);
-            }
-
-            return back()->withErrors(['msg' => 'Verification failed: ' . $e->getMessage()]);
+            return $request->wantsJson()
+                ? response()->json(['success' => false, 'message' => $e->getMessage()], 500)
+                : back()->withErrors(['msg' => 'Verification failed: ' . $e->getMessage()]);
         }
     }
 
-    public function scanQRCode(ScanQRRequest $request)
+    public function scanQRCode(ScanQRRequest $request, $tenant)
     {
         try {
-            $result = $this->documentVerificationService->scanQR($request->input('qr_data'));
-            return response()->json($result);
+            return response()->json($this->documentVerificationService->scanQR($request->input('qr_data')));
         } catch (Exception $e) {
             Log::error('Scan QR error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to scan QR code: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
+
 }

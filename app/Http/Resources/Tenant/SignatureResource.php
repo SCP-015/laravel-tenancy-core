@@ -23,6 +23,10 @@ class SignatureResource extends JsonResource
             'signed_at' => $this->signed_at,
             'ip_address' => $this->ip_address,
             'session_status' => $this->signingSession ? $this->signingSession->status : null,
+            'document' => $this->relationLoaded('document') ? (new DocumentResource($this->document))->resolve() : null,
+            'signing_session' => $this->relationLoaded('signingSession') ? (new SigningSessionResource($this->signingSession))->resolve() : null,
         ];
     }
+
+
 }

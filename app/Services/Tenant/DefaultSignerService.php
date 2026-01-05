@@ -10,44 +10,19 @@ class DefaultSignerService
 {
     public function getAllGroupedByWorkgroup()
     {
-        return DefaultSigner::with(['user', 'workgroup'])
-            ->get()
-            ->groupBy('workgroup_id')
-            ->map(function ($group) {
-                $workgroup = $group->first()->workgroup;
-                return [
-                    'workgroup_id' => $workgroup?->id,
-                    'workgroup_name' => $workgroup?->name ?? 'Unknown',
-                    'signers' => $group->sortBy('step_order')->map(function ($signer) {
-                        return [
-                            'id' => $signer->id,
-                            'user_id' => $signer->user_id,
-                            'user_name' => $signer->user?->name ?? 'Unknown',
-                            'user_email' => $signer->user?->email ?? '',
-                            'step_order' => $signer->step_order,
-                            'role' => $signer->role,
-                            'is_active' => $signer->is_active,
-                        ];
-                    })->values(),
-                ];
-            })
-            ->values();
+        return \App\Models\Tenant\Workgroup::with(['defaultSigners.user'])
+            ->whereHas('defaultSigners')
+            ->get();
     }
 
     public function getAvailableUsers()
     {
-        return TenantUser::all()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ];
-        });
+        return TenantUser::all();
     }
 
     public function getWorkgroups()
     {
-        return DefaultSigner::getWorkgroups();
+        return \App\Models\Tenant\Workgroup::where('is_active', true)->get();
     }
 
     public function store(array $data): DefaultSigner
@@ -105,9 +80,7 @@ class DefaultSignerService
             }
         }
 
-        $signer->update(array_filter($data, function($key) {
-            return in_array($key, ['workgroup_id', 'user_id', 'step_order', 'role', 'is_active']);
-        }, ARRAY_FILTER_USE_KEY));
+        $signer->update(array_intersect_key($data, array_flip(['workgroup_id', 'user_id', 'step_order', 'role', 'is_active'])));
 
         return $signer->fresh(['user', 'workgroup']);
     }
@@ -118,16 +91,12 @@ class DefaultSignerService
         return $signer->delete();
     }
 
-    public function getSignersForWorkgroup(int $workgroupId)
+    public function getSignersForWorkgroup(string $workgroupId)
     {
-        return DefaultSigner::getSignersForWorkgroup($workgroupId)->map(function ($signer) {
-            return [
-                'user_id' => $signer->user_id,
-                'user_name' => $signer->user?->name,
-                'user_email' => $signer->user?->email,
-                'step_order' => $signer->step_order,
-                'role' => $signer->role,
-            ];
-        });
+        return DefaultSigner::where('workgroup_id', $workgroupId)
+            ->where('is_active', true)
+            ->orderBy('step_order')
+            ->with('user')
+            ->get();
     }
 }
