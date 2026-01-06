@@ -14,10 +14,11 @@ class WorkgroupResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
+            'workgroup' => $this->name, // Frontend expects 'workgroup' key for the name
             'description' => $this->description,
             'is_active' => $this->is_active,
-            'signers' => DefaultSignerResource::collection($this->whenLoaded('defaultSigners')),
+            'signers' => DefaultSignerResource::collection($this->whenLoaded('defaultSigners'))->resolve(),
         ];
     }
+
 }

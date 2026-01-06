@@ -181,11 +181,14 @@ const doLogout = () => {
 .wrapper-settings {
     display: flex;
     flex-wrap: nowrap;
+    height: calc(100vh - 64px); /* Adjust based on navbar height */
+    overflow: hidden;
 }
 
 .nav-setting {
     min-width: 200px;
     width: 20%;
+    height: 100%;
 }
 
 .nav-setting.collapsed {
@@ -198,23 +201,24 @@ const doLogout = () => {
 }
 
 .inner-nav-setting {
-    position: absolute;
     width: 100%;
-    height: 90dvh;
-    margin-top: -19px;
-    margin-left: -29px;
+    height: 100%;
     box-shadow: 3px 0 8px -3px rgba(0, 0, 0, 0.1);
     padding: 30px 20px;
+    overflow-y: auto;
 }
 
+
 .inner-nav-setting.collapsed {
-    margin-left: -100%;
     display: none;
 }
 
 .content-setting {
     width: 80%;
+    height: 100%;
+    overflow-y: auto;
 }
+
 
 /* Icons */
 .chevron-circle {

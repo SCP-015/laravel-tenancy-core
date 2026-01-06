@@ -27,15 +27,30 @@ class DefaultSignerService
 
     public function store(array $data): DefaultSigner
     {
-        $userExists = DefaultSigner::where('workgroup_id', $data['workgroup_id'])
+        // Handle workgroup by ID or by Name (for firstOrCreate)
+        $workgroupId = $data['workgroup_id'] ?? null;
+        
+        if (!$workgroupId && isset($data['workgroup'])) {
+            $workgroup = \App\Models\Tenant\Workgroup::firstOrCreate(
+                ['name' => $data['workgroup']],
+                ['description' => $data['workgroup'] . ' Default Signer Workgroup', 'is_active' => true]
+            );
+            $workgroupId = $workgroup->id;
+        }
+
+        if (!$workgroupId) {
+            throw new Exception('Workgroup ID atau Nama Workgroup wajib diisi.');
+        }
+
+        $userExists = DefaultSigner::where('workgroup_id', $workgroupId)
             ->where('user_id', $data['user_id'])
             ->exists();
             
         if ($userExists) {
-            throw new Exception('User ini sudah terdaftar sebagai signer di workgroup tersebut.');
+            throw new Exception('User sudah terdaftar sebagai signer di workgroup tersebut.');
         }
 
-        $stepExists = DefaultSigner::where('workgroup_id', $data['workgroup_id'])
+        $stepExists = DefaultSigner::where('workgroup_id', $workgroupId)
             ->where('step_order', $data['step_order'])
             ->exists();
             
@@ -44,13 +59,14 @@ class DefaultSignerService
         }
 
         return DefaultSigner::create([
-            'workgroup_id' => $data['workgroup_id'],
+            'workgroup_id' => $workgroupId,
             'user_id' => $data['user_id'],
             'step_order' => $data['step_order'],
             'role' => $data['role'] ?? null,
             'is_active' => true,
         ]);
     }
+
 
     public function update(string $id, array $data): DefaultSigner
     {
@@ -65,7 +81,7 @@ class DefaultSignerService
                 ->exists();
 
             if ($userExists) {
-                throw new Exception('User ini sudah terdaftar sebagai signer di workgroup tersebut.');
+                throw new Exception('User sudah terdaftar sebagai signer di workgroup tersebut.');
             }
         }
 

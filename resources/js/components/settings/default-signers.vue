@@ -103,15 +103,15 @@
                 </button>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full">
+                <table class="w-full table-fixed">
                     <thead>
                         <tr class="bg-gray-50">
-                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-16">Urutan</th>
-                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium">Nama</th>
-                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium">Email</th>
-                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium">Role</th>
-                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-24">Status</th>
-                            <th class="text-center px-4 py-2 text-[11px] text-gray-600 font-medium w-24">Aksi</th>
+                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-[70px]">Urutan</th>
+                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-[25%]">Nama</th>
+                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-[25%]">Email</th>
+                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-[20%]">Role</th>
+                            <th class="text-left px-4 py-2 text-[11px] text-gray-600 font-medium w-[90px]">Status</th>
+                            <th class="text-center px-4 py-2 text-[11px] text-gray-600 font-medium w-[90px]">Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
