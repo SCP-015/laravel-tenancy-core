@@ -70,7 +70,12 @@ class DigitalSignatureService
 
         return [
             'has_ca' => (bool)$ca,
-            'ca_info' => $ca ? ['name' => $ca->name, 'common_name' => $ca->common_name] : null,
+            'ca_info' => $ca ? [
+                'name' => $ca->name,
+                'common_name' => $ca->common_name,
+                'valid_from' => $ca->valid_from->format('Y-m-d H:i:s'),
+                'valid_to' => $ca->valid_to->format('Y-m-d H:i:s'),
+            ] : null,
             'user' => $currentUser ? [
                 'id' => $currentUser->id,
                 'name' => $currentUser->name,
@@ -94,15 +99,16 @@ class DigitalSignatureService
         }
 
         $validityDays = $data['validity_days'] ?? 3650;
-        $distinguishedName = [
-            'countryName' => $data['country'],
-            'stateOrProvinceName' => $data['state'] ?? '',
-            'localityName' => $data['city'] ?? '',
-            'organizationName' => $data['organization'],
-            'commonName' => $data['common_name'],
-        ];
 
-        $caData = $this->pkiService->createRootCA($distinguishedName, $validityDays);
+        $caData = $this->pkiService->createRootCA(
+            $data['common_name'],
+            $data['organization'],
+            $data['country'],
+            $data['state'] ?? 'Jakarta',
+            $data['city'] ?? 'Jakarta',
+            null,
+            $validityDays
+        );
 
         $tenantId = tenant('id');
         $certPath = "tenants/{$tenantId}/ca/root-ca.crt";
@@ -114,10 +120,11 @@ class DigitalSignatureService
         return CertificateAuthority::create([
             'name' => $data['organization'],
             'common_name' => $data['common_name'],
+            'serial_number' => $caData['serial_number'],
             'certificate_path' => $certPath,
             'private_key_path' => $keyPath,
-            'valid_from' => now(),
-            'valid_to' => now()->addDays($validityDays),
+            'valid_from' => $caData['valid_from'],
+            'valid_to' => $caData['valid_to'],
         ]);
     }
 
@@ -135,29 +142,21 @@ class DigitalSignatureService
 
         $passphraseHash = hash_hmac('sha256', 'user-cert-' . $user->id . '-' . tenant('id'), config('app.key'));
 
-        $distinguishedName = [
-            'countryName' => 'ID',
-            'stateOrProvinceName' => '',
-            'localityName' => '',
-            'organizationName' => $ca->name,
-            'commonName' => $user->name,
-            'emailAddress' => $user->email,
-        ];
-
         $caCert = Storage::get($ca->certificate_path);
         $caKey = Storage::get($ca->private_key_path);
 
         $certData = $this->pkiService->createUserCertificate(
-            $distinguishedName,
             $caCert,
             $caKey,
+            $user->name,
+            $user->email,
             $passphraseHash,
             365
         );
 
         $tenantId = tenant('id');
-        $certPath = "tenants/{$tenantId}/certificates/{$user->id}_{$certData['serial']}.crt";
-        $keyPath = "tenants/{$tenantId}/certificates/{$user->id}_{$certData['serial']}.key";
+        $certPath = "tenants/{$tenantId}/certificates/{$user->id}_{$certData['serial_number']}.crt";
+        $keyPath = "tenants/{$tenantId}/certificates/{$user->id}_{$certData['serial_number']}.key";
 
         Storage::put($certPath, $certData['certificate']);
         Storage::put($keyPath, $certData['private_key']);
@@ -168,13 +167,13 @@ class DigitalSignatureService
             'label' => $data['label'],
             'common_name' => $user->name,
             'email' => $user->email,
-            'serial_number' => $certData['serial'],
+            'serial_number' => $certData['serial_number'],
             'certificate_path' => $certPath,
             'private_key_path' => $keyPath,
             'passphrase' => bcrypt($passphraseHash),
             'passphrase_hash' => $passphraseHash,
-            'valid_from' => now(),
-            'valid_to' => now()->addDays(365),
+            'valid_from' => $certData['valid_from'],
+            'valid_to' => $certData['valid_to'],
             'is_active' => true,
         ]);
     }

@@ -131,9 +131,10 @@ class User extends Model implements Syncable, Auditable
 
     /**
      * Check if user has admin role.
+     * Super admin otomatis dianggap sebagai admin.
      */
     public function isAdmin(): bool
     {
-        return $this->hasRole('admin');
+        return $this->hasRole('admin') || $this->hasRole('super_admin');
     }
 }
