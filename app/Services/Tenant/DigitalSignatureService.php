@@ -2,6 +2,7 @@
 
 namespace App\Services\Tenant;
 
+use App\Models\CentralRootCA;
 use App\Models\Tenant\CertificateAuthority;
 use App\Models\Tenant\Document;
 use App\Models\Tenant\Signature;
@@ -29,7 +30,7 @@ class DigitalSignatureService
 
     public function getDashboard(?TenantUser $currentUser = null)
     {
-        $ca = CertificateAuthority::where('is_revoked', false)->first();
+        $ca = CertificateAuthority::where('is_central', true)->where('is_revoked', false)->first();
         $isAdmin = $currentUser ? ($currentUser->isSuperAdmin() || $currentUser->isAdmin()) : false;
 
         $myCerts = $currentUser ? UserCertificate::where('user_id', $currentUser->id)
@@ -93,57 +94,92 @@ class DigitalSignatureService
 
     public function createCA(array $data): CertificateAuthority
     {
-        $existingCA = CertificateAuthority::first();
-        if ($existingCA) {
-            throw new Exception('Certificate Authority already exists.');
+        throw new Exception('Creating Root CA is not allowed. Central Root CA is managed globally.');
+    }
+
+    public function ensureCentralRootCA(): CertificateAuthority
+    {
+        $ca = CertificateAuthority::where('is_central', true)->where('is_revoked', false)->first();
+        if ($ca) {
+            return $ca;
         }
 
-        $validityDays = $data['validity_days'] ?? 3650;
-
-        $caData = $this->pkiService->createRootCA(
-            $data['common_name'],
-            $data['organization'],
-            $data['country'],
-            $data['state'] ?? 'Jakarta',
-            $data['city'] ?? 'Jakarta',
-            null,
-            $validityDays
-        );
+        // Get active Central Root CA from central database
+        $centralCA = CentralRootCA::getActive();
+        if (!$centralCA) {
+            throw new Exception('Central Root CA is not available.');
+        }
 
         $tenantId = tenant('id');
-        $certPath = "tenants/{$tenantId}/ca/root-ca.crt";
-        $keyPath = "tenants/{$tenantId}/ca/root-ca.key";
+        $tenantCertPath = "tenants/{$tenantId}/ca/root-ca.crt";
+        $tenantKeyPath = "tenants/{$tenantId}/ca/root-ca.key";
 
-        Storage::put($certPath, $caData['certificate']);
-        Storage::put($keyPath, $caData['private_key']);
+        // Read from central storage using absolute path (not affected by tenancy)
+        $basePath = base_path();
+        $caCertFile = $basePath . '/storage/app/public/' . $centralCA->certificate_path;
+        $caKeyFile = $basePath . '/storage/app/public/' . $centralCA->private_key_path;
+
+        $caCert = file_get_contents($caCertFile);
+        $caKey = file_get_contents($caKeyFile);
+
+        if (!$caCert || !$caKey) {
+            throw new Exception('Failed to read Central Root CA files from storage.');
+        }
+
+        // Write to tenant storage using absolute path
+        $basePath = base_path();
+        $tenantCertFile = $basePath . '/storage/app/public/' . $tenantCertPath;
+        $tenantKeyFile = $basePath . '/storage/app/public/' . $tenantKeyPath;
+        
+        @mkdir(dirname($tenantCertFile), 0755, true);
+        file_put_contents($tenantCertFile, $caCert);
+        file_put_contents($tenantKeyFile, $caKey);
+
+        $tenantCreatedAt = tenant('created_at') ?? now();
+        $validityDaysRemaining = $centralCA->getValidityDaysRemaining();
 
         return CertificateAuthority::create([
-            'name' => $data['organization'],
-            'common_name' => $data['common_name'],
-            'serial_number' => $caData['serial_number'],
-            'certificate_path' => $certPath,
-            'private_key_path' => $keyPath,
-            'valid_from' => $caData['valid_from'],
-            'valid_to' => $caData['valid_to'],
+            'central_root_ca_id' => $centralCA->id,
+            'is_central' => true,
+            'name' => 'Nusawork Root CA',
+            'common_name' => $centralCA->common_name,
+            'serial_number' => $centralCA->serial_number,
+            'certificate_path' => $tenantCertPath,
+            'private_key_path' => $tenantKeyPath,
+            'valid_from' => $tenantCreatedAt,
+            'valid_to' => $centralCA->valid_to,
         ]);
     }
 
     public function issueCertificate(array $data, int $userId): UserCertificate
     {
-        $ca = CertificateAuthority::first();
-        if (!$ca) {
-            throw new Exception('Root CA does not exist. Please create it first.');
-        }
-
         $user = TenantUser::findOrFail($userId);
         if (!$user) {
             throw new Exception('User not found.');
         }
 
+        $existingCert = UserCertificate::where('user_id', $userId)
+            ->where('is_revoked', false)
+            ->first();
+        if ($existingCert) {
+            throw new Exception('User already has an active certificate. Only 1 certificate per user is allowed.');
+        }
+
+        $ca = $this->ensureCentralRootCA();
+
         $passphraseHash = hash_hmac('sha256', 'user-cert-' . $user->id . '-' . tenant('id'), config('app.key'));
 
-        $caCert = Storage::get($ca->certificate_path);
-        $caKey = Storage::get($ca->private_key_path);
+        // Read CA certificate and key using absolute path
+        $basePath = base_path();
+        $caCertFile = $basePath . '/storage/app/public/' . $ca->certificate_path;
+        $caKeyFile = $basePath . '/storage/app/public/' . $ca->private_key_path;
+
+        $caCert = file_get_contents($caCertFile);
+        $caKey = file_get_contents($caKeyFile);
+
+        if (!$caCert || !$caKey) {
+            throw new Exception('Failed to read CA certificate or key from storage.');
+        }
 
         $certData = $this->pkiService->createUserCertificate(
             $caCert,

@@ -15,21 +15,10 @@
             <button @click="activeTab = 'dashboard'" :class="['tab tab-sm', activeTab === 'dashboard' ? 'tab-active' : '']">Dashboard</button>
             <button @click="activeTab = 'certificates'" :class="['tab tab-sm', activeTab === 'certificates' ? 'tab-active' : '']">Certificates</button>
         </div>
-        <div class="flex gap-2">
-             <button v-if="isAdmin && !hasCA" @click="showCreateCAModal = true" class="btn btn-xs btn-neutral">Setup Root CA</button>
-        </div>
     </div>
 
     <!-- Dashboard Tab -->
     <div v-if="activeTab === 'dashboard'" class="space-y-6">
-        <!-- Alert: No CA -->
-        <div v-if="!hasCA" class="alert alert-warning shadow-lg">
-          <div class="flex flex-col gap-2">
-            <h3 class="font-bold">Root CA Not Found</h3>
-            <p class="text-sm">You must configure the Root Certificate Authority (CA) for this tenant before issuing certificates or signing documents.</p>
-          </div>
-        </div>
-
     <!-- Stats / Active CA -->
     <div v-if="hasCA && caIncluded" class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="stats shadow">
@@ -203,7 +192,6 @@
         </div>
     </div>
     <!-- Modals -->
-    <CreateCAModal v-if="showCreateCAModal" @close="showCreateCAModal = false" />
     <IssueCertificateModal v-if="showIssueCertModal" @close="showIssueCertModal = false" />
     <CreateSessionModal v-if="showCreateSessionModal" :available-signers="availableSigners" :templates="templates" @close="showCreateSessionModal = false" />
     
@@ -220,7 +208,6 @@
 <script setup>
 import { ref, computed } from 'vue';
 import dayjs from 'dayjs';
-import CreateCAModal from './Partials/CreateCAModal.vue';
 import IssueCertificateModal from './Partials/IssueCertificateModal.vue';
 import CreateSessionModal from './Partials/CreateSessionModal.vue';
 import SigningModal from './Partials/SigningModal.vue';
@@ -259,7 +246,6 @@ const props = defineProps({
 });
 
 const activeTab = ref('dashboard');
-const showCreateCAModal = ref(false);
 const showIssueCertModal = ref(false);
 const showCreateSessionModal = ref(false);
 const selectedSignature = ref(null);

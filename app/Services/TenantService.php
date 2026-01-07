@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Carbon;
 use OwenIt\Auditing\Models\Audit;
+use Stancl\Tenancy\Facades\Tenancy;
 
 class TenantService
 {
@@ -62,6 +63,9 @@ class TenantService
             $tenant->domains()->create([
                 'domain' => $input['code'],
             ]);
+
+            // Auto-assign Central Root CA untuk tenant
+            static::assignCentralRootCAToTenant($tenant);
 
             return [
                 'status' => 'success',
@@ -456,5 +460,66 @@ class TenantService
             ];
         }
         // @codeCoverageIgnoreEnd
+    }
+
+    private static function assignCentralRootCAToTenant(Tenant $tenant): void
+    {
+        try {
+            // Initialize tenancy context
+            tenancy()->initialize($tenant);
+
+            // Get Central Root CA and assign to tenant
+            $centralCA = \App\Models\CentralRootCA::getActive();
+            if (!$centralCA) {
+                throw new \Exception('Central Root CA is not available.');
+            }
+
+            $tenantId = $tenant->id;
+            $tenantCertPath = "tenants/{$tenantId}/ca/root-ca.crt";
+            $tenantKeyPath = "tenants/{$tenantId}/ca/root-ca.key";
+
+            // Read from central storage using absolute path
+            $basePath = base_path();
+            $caCertFile = $basePath . '/storage/app/public/' . $centralCA->certificate_path;
+            $caKeyFile = $basePath . '/storage/app/public/' . $centralCA->private_key_path;
+
+            $caCert = file_get_contents($caCertFile);
+            $caKey = file_get_contents($caKeyFile);
+
+            if (!$caCert || !$caKey) {
+                throw new \Exception('Failed to read Central Root CA files from storage.');
+            }
+
+            // Write to tenant storage
+            \Illuminate\Support\Facades\Storage::disk('public')->put($tenantCertPath, $caCert);
+            \Illuminate\Support\Facades\Storage::disk('public')->put($tenantKeyPath, $caKey);
+
+            // Create CA record in tenant database
+            \App\Models\Tenant\CertificateAuthority::create([
+                'central_root_ca_id' => $centralCA->id,
+                'is_central' => true,
+                'name' => 'Nusawork Root CA',
+                'common_name' => $centralCA->common_name,
+                'serial_number' => $centralCA->serial_number,
+                'certificate_path' => $tenantCertPath,
+                'private_key_path' => $tenantKeyPath,
+                'valid_from' => $tenant->created_at ?? now(),
+                'valid_to' => $centralCA->valid_to,
+            ]);
+
+            tenancy()->end();
+        } catch (\Throwable $th) {
+            static::logError('Failed to assign Central Root CA to tenant', [
+                'tenant_id' => $tenant->id,
+                'file' => $th->getFile(),
+                'line' => $th->getLine(),
+                'message' => $th->getMessage(),
+            ]);
+            try {
+                tenancy()->end();
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
     }
 }
